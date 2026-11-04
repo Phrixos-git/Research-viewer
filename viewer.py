@@ -198,6 +198,11 @@ def report_rows(snapshot, history):
     return sorted(rows, key=lambda r: (-r['change'], r['id'])), label
 
 
+def rising_titles(rows):
+    eligible = [r for r in rows if r['before'] > 0 and r['after'] >= 1.5 * r['before']]
+    return sorted(eligible, key=lambda r: (-r['change'], r['id']))[:3]
+
+
 def render_html(snapshot, history):
     esc = html.escape
     rows, label = report_rows(snapshot, history)
@@ -206,12 +211,12 @@ def render_html(snapshot, history):
         return f'{value:,.1f}'.removesuffix('.0')
     def percent(row):
         return f"{row['percent']:+.1f}%" if row['percent'] is not None else '算出不可（比較元0）'
-    rising = [r for r in rows if r['change'] > 0][:3]
+    rising = rising_titles(rows)
     cards = ''.join(f'<article class="rise"><h3>{esc(r["name"])}</h3>'
                     f'<strong>+{number(r["change"])} 人</strong><p>{percent(r)}</p>'
                     f'<small>比較 {r["samples"]}/{r["expected"]} 時点</small></article>' for r in rising)
     if not cards:
-        cards = '<p>上昇タイトルなし</p>' if rows else '<p>比較データなし</p>'
+        cards = '<p>該当タイトルなし</p>' if rows else '<p>比較データなし</p>'
     ranking = ''.join(f'<tr><td>{i}</td><th scope="row">{esc(g["name"])}</th>'
                       f'<td>{g["viewers"]:,}</td></tr>' for i, g in enumerate(snapshot['games'], 1))
     compare = ''.join(f'<tr><th scope="row">{esc(r["name"])}</th><td>{number(r["before"])}</td>'
@@ -235,7 +240,7 @@ th[scope=row],thead th:first-child{{text-align:left}}thead{{background:#202337}}
 <p>{slot:%Y年%m月%d日 %H:%M} 日本時間 · {len(snapshot['games'])} タイトル</p>
 <p>取得配信数：{snapshot["stream_count"]:,} / 最大1,000件 · ゲーム集計対象：{snapshot["included_stream_count"]:,}配信</p>
 <p class="note">収集開始：{esc(snapshot['started_at'])}<br>収集終了：{esc(snapshot['finished_at'])}</p>
-<h2>急上昇タイトル3選</h2><p>{esc(label)} · 増加人数順</p><div class="cards">{cards}</div>
+<h2>急上昇タイトル3選</h2><p>{esc(label)} · 1.5倍以上（増加率50％以上）・増加人数順</p><div class="cards">{cards}</div>
 <h2>{esc(label)}</h2><p class="note">両方に記録がある同じ時刻だけで比較。取得範囲外・欠測は0で補完しません。件数不足の比較は部分集計です。</p>{comparison}
 <h2>全タイトル</h2><div class="scroll"><table><thead><tr><th>順位</th><th>ゲームタイトル</th><th>同時視聴者数（人）</th></tr></thead><tbody>{ranking}</tbody></table></div>
 <footer>Twitch公式APIの取得期間中の集計値です。配信別視聴者数の合計で、ユニーク人数ではありません。<br>
@@ -470,13 +475,13 @@ def send_reports(root, store, history, slot):
             continue
         snapshot = indexed[delivery['scheduled_at']]
         rows, label = report_rows(snapshot, history)
-        rising = [r for r in rows if r['change'] > 0][:3]
+        rising = rising_titles(rows)
         lines = [f"Twitchゲーム視聴者数 {delivery['scheduled_at']}",
                  f"上位最大1,000配信から集計。取得 {snapshot['stream_count']}件、ゲーム集計対象 {snapshot['included_stream_count']}件",
-                 'ゲーム全体の視聴者数ではありません。', label, '急上昇タイトル3選']
+                 'ゲーム全体の視聴者数ではありません。', label, '急上昇タイトル3選（1.5倍以上・増加率50％以上、増加人数順）']
         lines.extend(f"{r['name']}: +{r['change']:,.1f}人（比較 {r['samples']}/{r['expected']}時点）" for r in rising)
         if not rising:
-            lines.append('上昇タイトルなし' if rows else '比較データなし')
+            lines.append('該当タイトルなし' if rows else '比較データなし')
         lines.append('全タイトル')
         lines.extend(f"{i}. {g['name']}: {g['viewers']:,}人" for i, g in enumerate(snapshot['games'], 1))
         lines.append('全体の前日比較と取得日時はHTML本文・添付HTMLをご覧ください。')

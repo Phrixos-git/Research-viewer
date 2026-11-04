@@ -147,6 +147,21 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(rows[0]['change'], 20)
         self.assertIn('21', label)
 
+    def test_risers_require_50_percent_increase_and_exclude_zero_baseline(self):
+        rows = [viewer.comparison_row(str(i), str(i), before, after, 1, 1)
+                for i, (before, after) in enumerate([(100, 149), (100, 150), (100, 200), (0, 500), (100, 100)])]
+        self.assertEqual([r['id'] for r in viewer.rising_titles(rows)], ['2', '1'])
+        rows += [viewer.comparison_row('large', 'large', 1000, 1500, 1, 1),
+                 viewer.comparison_row('small', 'small', 1, 10, 1, 1)]
+        self.assertEqual([r['id'] for r in viewer.rising_titles(rows)], ['large', '2', '1'])
+
+    def test_html_features_exactly_50_percent_increase(self):
+        old = sample('2026-11-04', 19, game('a', 100))
+        new = sample('2026-11-04', 20, game('a', 150))
+        page = viewer.render_html(new, [old, new])
+        self.assertIn('class="rise"', page)
+        self.assertIn('1.5倍以上', page)
+
     def test_html_escapes_names_and_does_not_invent_three_risers(self):
         s = sample('2026-11-04', 20, game('a', 100, '<script>alert(1)</script>'))
         html = viewer.render_html(s, [sample('2026-11-04', 19, game('a', 50)), s])
