@@ -235,7 +235,10 @@ small,.note{{color:#b5bfd2}}.badge{{color:#c8b7ff;letter-spacing:.08em}}.cards{{
 article{{background:#202337;border:1px solid #46415e;border-radius:14px;padding:20px}}article h3{{margin-top:0}}strong{{font-size:1.5rem;color:#90e0bc}}
 .scroll{{overflow:auto}}table{{border-collapse:collapse;width:100%;white-space:nowrap}}th,td{{padding:12px;text-align:right;border-bottom:1px solid #30354a}}
 th[scope=row],thead th:first-child{{text-align:left}}thead{{background:#202337}}tbody tr:hover{{background:#1d2232}}footer{{margin-top:40px;color:#b5bfd2}}
-</style></head><body><main>
+</style></head><body bgcolor="#10121b" style="margin:0;padding:0;background-color:#10121b;color:#e9edf5;font:16px/1.7 system-ui,sans-serif;">
+<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#10121b" style="width:100%;border-collapse:collapse;background-color:#10121b;color:#e9edf5;white-space:normal;">
+<tr><td bgcolor="#10121b" align="left" style="padding:0;border:0;text-align:left;background-color:#10121b;color:#e9edf5;font:16px/1.7 system-ui,sans-serif;">
+<main style="max-width:1100px;margin:0 auto;padding:32px 20px;background-color:#10121b;color:#e9edf5;">
 <p class="badge">TWITCH / GAME VIEWERS</p><h1>ゲーム別 視聴者数ランキング（上位配信から集計）</h1>
 <p>{slot:%Y年%m月%d日 %H:%M} 日本時間 · {len(snapshot['games'])} タイトル</p>
 <p>取得配信数：{snapshot["stream_count"]:,} / 最大1,000件 · ゲーム集計対象：{snapshot["included_stream_count"]:,}配信</p>
@@ -245,7 +248,7 @@ th[scope=row],thead th:first-child{{text-align:left}}thead{{background:#202337}}
 <h2>全タイトル</h2><div class="scroll"><table><thead><tr><th>順位</th><th>ゲームタイトル</th><th>同時視聴者数（人）</th></tr></thead><tbody>{ranking}</tbody></table></div>
 <footer>Twitch公式APIの取得期間中の集計値です。配信別視聴者数の合計で、ユニーク人数ではありません。<br>
 Twitch全体の上位最大1,000配信のうちIGDB ID登録済みゲームが対象です。ゲームの全配信の合計ではありません。ページ取得中の変動により順位・人数に誤差が生じ得ます。</footer>
-</main></body></html>'''
+</main></td></tr></table></body></html>'''
 
 
 def atomic_write(path, content, mode=0o644):

@@ -1,4 +1,6 @@
 import json
+import re
+from html.parser import HTMLParser
 import smtplib
 import tempfile
 import unittest
@@ -59,6 +61,27 @@ class MessageTests(unittest.TestCase):
         self.assertEqual(len(files), 1)
         self.assertEqual(files[0].get_content().strip(), '<html>ゲームA</html>')
         self.assertEqual(files[0].get_filename(), 'twitch-2026-11-04-23.html')
+
+    def test_report_remains_dark_when_mail_client_removes_head_styles(self):
+        class Tags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.elements = []
+            def handle_starttag(self, tag, attrs):
+                self.elements.append((tag, dict(attrs)))
+        snapshot = sample()
+        report = viewer.render_html(snapshot, [snapshot])
+        msg = mailer.make_message('sender@gmail.com', 'one@example.com', snapshot['scheduled_at'], 'text', report)
+        parts = [msg.get_body(preferencelist=('html',)), *msg.iter_attachments()]
+        for part in parts:
+            parser = Tags()
+            parser.feed(re.sub(r'<style[^>]*>.*?</style>', '', part.get_content(), flags=re.S))
+            for tag in ['body', 'table', 'td']:
+                attributes = next(attrs for name, attrs in parser.elements if name == tag)
+                self.assertEqual(attributes.get('bgcolor'), '#10121b')
+                self.assertIn('background-color:#10121b', attributes.get('style', ''))
+                self.assertIn('color:#e9edf5', attributes.get('style', ''))
+            self.assertIn(('table', 'presentation'), [(tag, attrs.get('role')) for tag, attrs in parser.elements])
 
     def test_gmail_uses_verified_tls_and_single_recipient_envelope(self):
         msg = mailer.make_message('sender@gmail.com', 'one@example.com', sample()['scheduled_at'], 'text', '<p>HTML</p>')
