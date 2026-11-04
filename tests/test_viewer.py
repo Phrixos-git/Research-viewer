@@ -163,6 +163,25 @@ class SchedulingTests(unittest.TestCase):
         for stamp in ['2026-11-04T18:00:00+09:00', '2026-11-04T23:11:00+09:00']:
             self.assertIsNone(viewer.slot_for(datetime.fromisoformat(stamp)))
 
+    def test_working_directory_is_unquoted_but_exec_arguments_are_quoted(self):
+        root = Path('/tmp/project space%name')
+        service, _ = viewer.timer_units(root)
+        self.assertIn('WorkingDirectory=/tmp/project space%%name\n', service)
+        self.assertIn('"/tmp/project space%%name/viewer.py" collect', service)
+
+    def test_install_failure_reports_actual_systemctl_command_and_stderr(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / '.local').mkdir()
+            (root / '.local/config.json').write_text('{}')
+            with patch('viewer.check_repository'), patch('viewer.git'), patch('viewer.Path.home', return_value=root), patch('viewer.subprocess.run') as run:
+                run.return_value = subprocess.CompletedProcess([], 1, stdout='', stderr='WorkingDirectory path is not absolute')
+                with self.assertRaises(viewer.ViewerError) as error:
+                    viewer.install_timer(root)
+                self.assertIn('systemctl --user daemon-reload', str(error.exception))
+                self.assertIn('WorkingDirectory path is not absolute', str(error.exception))
+                self.assertNotIn('接続できません', str(error.exception))
+
     def test_timer_contains_exactly_five_hours_and_no_catch_up(self):
         unit, timer = viewer.timer_units(Path('/tmp/a space'))
         self.assertIn('Asia/Tokyo', timer)

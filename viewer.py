@@ -579,7 +579,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory={unit_quote(root)}
+WorkingDirectory={str(root).replace('%', '%%')}
 ExecStart={unit_quote(sys.executable)} {unit_quote(root / 'viewer.py')} collect
 Environment=PYTHONUNBUFFERED=1
 TimeoutStartSec=45min
@@ -611,9 +611,10 @@ def install_timer(root):
     for name, content in [('research-viewer.service', service), ('research-viewer.timer', timer)]:
         atomic_write(destination / name, content)
     for args in [('daemon-reload',), ('enable', '--now', 'research-viewer.timer')]:
-        result = subprocess.run(['systemctl', '--user', *args], capture_output=True, timeout=30)
+        result = subprocess.run(['systemctl', '--user', *args], capture_output=True, text=True, timeout=30)
         if result.returncode:
-            raise ViewerError('ユーザーのsystemdに接続できません。PC上のターミナルでタイマー登録を実行してください。')
+            detail = result.stderr.strip() or result.stdout.strip() or f'終了コード {result.returncode}'
+            raise ViewerError(f"systemctl --user {' '.join(args)} に失敗しました。\n{detail}")
     print('毎日19・20・21・22・23時（日本時間）の自動取得を登録しました。')
 
 

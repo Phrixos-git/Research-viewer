@@ -208,6 +208,9 @@ GitHubで `data/日付/時刻.json` と `output/index.html` が更新されて�
 
 ## 7. 定期実行を開始する
 
+生成するサービスの作業フォルダーは `WorkingDirectory=/home/Arietis/projects/research-viewer` のように、値全体を引用符で囲まずに記載します。`ExecStart` の引数の引用符とは扱いが異なります。
+旧版の引用符付き設定で起動に失敗した場合は、修正後の `install-timer` を再実行して設定を生成し直してください。登録処理に失敗した場合は、失敗したsystemctlコマンドと、そのエラー詳細を表示します。
+
 手順6が成功したら登録します。登録後は、同じ時刻に手動の `collect` を重ねて起動しないでください。
 
 ```bash
