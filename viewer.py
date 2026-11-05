@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Twitch collection, paired comparisons and local scheduling (stdlib only)."""
 import argparse
+import audience
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -24,6 +25,7 @@ from zoneinfo import ZoneInfo
 JST = ZoneInfo('Asia/Tokyo')
 REMOTE = 'https://github.com/Phrixos-git/Research-viewer.git'
 HOURS = range(19, 24)
+DISPLAY_LIMIT = 100
 ROOT = Path(__file__).resolve().parent
 
 
@@ -104,6 +106,7 @@ class Client:
         for row in self.pages('/streams', type='live'):
             if (not isinstance(row, dict) or not isinstance(row.get('id'), str) or not row['id']
                     or not isinstance(row.get('game_id'), str)
+                    or not isinstance(row.get('user_id'), str) or not row['user_id']
                     or type(row.get('viewer_count')) is not int or row['viewer_count'] < 0):
                 raise ViewerError('配信情報の形式が不正です。')
             if row['id'] in seen:
@@ -122,12 +125,14 @@ class Client:
                 if not isinstance(row, dict) or not isinstance(row.get('id'), str) or not isinstance(row.get('name'), str):
                     raise ViewerError('ゲーム情報の形式が不正です。')
                 if row.get('igdb_id'):
-                    games[row['id']] = dict(id=row['id'], name=row['name'], viewers=0)
+                    games[row['id']] = dict(id=row['id'], name=row['name'], viewers=0, broadcasters={})
         included = 0
         active = set()
         for stream in streams:
             if stream['game_id'] in games:
                 games[stream['game_id']]['viewers'] += stream['viewer_count']
+                counts = games[stream['game_id']]['broadcasters']
+                counts[stream['user_id']] = counts.get(stream['user_id'], 0) + stream['viewer_count']
                 active.add(stream['game_id'])
                 included += 1
         return dict(stream_count=len(streams), included_stream_count=included,
@@ -198,9 +203,131 @@ def report_rows(snapshot, history):
     return sorted(rows, key=lambda r: (-r['change'], r['id'])), label
 
 
-def rising_titles(rows):
-    eligible = [r for r in rows if r['before'] > 0 and r['after'] >= 1.5 * r['before']]
+def rising_titles(rows, category='normal'):
+    eligible = [r for r in rows if r['category'] == category]
     return sorted(eligible, key=lambda r: (-r['change'], r['id']))[:3]
+
+
+def rising_groups(snapshot, history):
+    slot = scheduled_time(snapshot)
+    daily = slot.hour in (21, 23)
+    indexed = {scheduled_time(s): s for s in history}
+    indexed[slot] = snapshot
+    groups = []
+    for hour in (range(19, slot.hour + 1) if daily else [slot.hour]):
+        current_slot = slot.replace(hour=hour)
+        previous_slot = current_slot - (timedelta(days=1) if daily else timedelta(hours=1))
+        today = indexed.get(current_slot)
+        previous = indexed.get(previous_slot) if daily or hour != 19 else None
+        label = f'前日比較：{hour}時' if daily else f'直前比較：{hour - 1}時 → {hour}時'
+        rows = []
+        if today is not None and previous is not None:
+            before = {g['id']: g for g in previous['games']}
+            for game in today['games']:
+                if game['id'] in before:
+                    old = before[game['id']]
+                    row = comparison_row(game['id'], game['name'], old['viewers'], game['viewers'], 1, 1)
+                    row.update(audience.classify_game(old, game))
+                    rows.append(row)
+        groups.append((label, rows))
+    return groups
+
+
+def rise_detail(row):
+    remaining = f"{row['remaining_percent']:+.1f}%" if row['remaining_percent'] is not None else '算出不可'
+    return (f"最多寄与配信者ID {row['excluded_broadcaster']}：+{row['contribution']:,}人・寄与率{row['contribution_percent']:.1f}% / "
+            f"除外後 {row['remaining_before']:,} → {row['remaining_after']:,}人（{remaining}）")
+
+
+def ranking_changes(snapshot, history):
+    slot = scheduled_time(snapshot)
+    if slot.hour != 23:
+        return None
+    prev_rank = {}
+    prev_slot = slot - timedelta(days=1)
+    for s in history:
+        if scheduled_time(s) == prev_slot:
+            prev_rank = {g["id"]: i for i, g in enumerate(s["games"], start=1)}
+            break
+    result = {}
+    for i, g in enumerate(snapshot["games"][:DISPLAY_LIMIT], start=1):
+        gid = g["id"]
+        if gid not in prev_rank:
+            result[gid] = "★"
+        elif prev_rank[gid] == i:
+            result[gid] = "-"
+        elif prev_rank[gid] > i:
+            result[gid] = "↑"
+        else:
+            result[gid] = "↓"
+    return result
+
+
+def render_ranking(games, changes=None):
+    """Render a game viewers ranking table as an HTML string.
+
+    games: list of dicts with "id", "name", "viewers"; order is preserved.
+    """
+    games = games[:DISPLAY_LIMIT]
+    max_viewers = max((g['viewers'] for g in games), default=0)
+
+    cell = (
+        "padding:8px 6px;line-height:1.4;white-space:normal;"
+        "word-wrap:break-word;overflow-wrap:anywhere;"
+        "border-bottom:1px solid #30354a;vertical-align:middle;"
+    )
+    change_style = cell + 'text-align:center;'
+    change_header = (f'<th scope="col" style="{change_style}border-bottom:0;">前日比</th>'
+                     if changes is not None else '')
+    rank_style = ('width:4.5em;min-width:4.5em;text-align:center;'
+                  'white-space:nowrap;word-wrap:normal;overflow-wrap:normal;')
+    badge = {
+        1: "background-color:#3d476b;color:#e3e8f7;",
+        2: "background-color:#39415c;color:#dfe4f0;",
+        3: "background-color:#463f5e;color:#e6e0f2;",
+    }
+    rows = []
+    for idx, g in enumerate(games, start=1):
+        v = g['viewers']
+        if max_viewers > 0 and v > 0:
+            pct = max(2, min(100, round((v / max_viewers) ** 0.5 * 100)))
+        else:
+            pct = 0
+        name = html.escape(g['name'])
+        badge_style = badge.get(idx, "background-color:#2b3049;color:#c7cde0;")
+        number = f"{v:,}"
+        row_color = {1: '#24243a', 2: '#222739', 3: '#29243a'}.get(idx)
+        row_style = f'background-color:{row_color};' if row_color else ''
+        change_cell = (f'<td class="rank-change" style="{change_style}">{html.escape(changes[g["id"]])}</td>'
+                       if changes is not None else '')
+        rows.append(
+            f'<tr style="{row_style}">'
+            f'<td style="{cell}{rank_style}font-variant-numeric:tabular-nums;">'
+            f'<span class="rank-badge rank-{idx}" style="display:inline-block;white-space:nowrap;padding:2px 10px;border-radius:999px;font-weight:600;{badge_style}">{idx}</span>'
+            "</td>"
+            f'<th scope="row" style="{cell}min-width:0;text-align:left;">{name}</th>'
+            f'<td style="{cell}text-align:right;font-variant-numeric:tabular-nums;">'
+            '<div class="viewers" style="display:flex;align-items:center;justify-content:flex-start;gap:10px;">'
+            f'<span class="viewer-number" style="flex:1;min-width:0;text-align:right;">{number}</span>'
+            '<span class="bar-track" aria-hidden="true" style="display:inline-block;width:140px;max-width:45%;height:8px;flex:0 0 140px;">'
+            f'<span class="viewer-bar" aria-hidden="true" style="display:block;height:100%;width:{pct}%;background-color:#5b4a9e;background-image:linear-gradient(to right,#5b4a9e,#90e0bc33);border-radius:4px;"></span>'
+            "</span>"
+            "</div>"
+            "</td>"
+            f'{change_cell}'
+            "</tr>"
+        )
+    return (
+        '<table class="report-table ranking" style="max-width:100%;table-layout:auto;border-collapse:collapse;">'
+        '<thead style="position:sticky;top:0;background-color:#202337;box-shadow:0 1px 0 #46415e;"><tr>'
+        f'<th scope="col" style="{cell}border-bottom:0;{rank_style}">順位</th>'
+        f'<th scope="col" style="{cell}border-bottom:0;text-align:left;">ゲームタイトル</th>'
+        f'<th scope="col" style="{cell}border-bottom:0;text-align:right;">同時視聴者数（人）</th>'
+        f'{change_header}'
+        "</tr></thead>"
+        "<tbody>" + "".join(rows) + "</tbody>"
+        "</table>"
+    )
 
 
 def render_html(snapshot, history):
@@ -211,43 +338,100 @@ def render_html(snapshot, history):
         return f'{value:,.1f}'.removesuffix('.0')
     def percent(row):
         return f"{row['percent']:+.1f}%" if row['percent'] is not None else '算出不可（比較元0）'
-    rising = rising_titles(rows)
-    cards = ''.join(f'<article class="rise"><h3>{esc(r["name"])}</h3>'
-                    f'<strong>+{number(r["change"])} 人</strong><p>{percent(r)}</p>'
-                    f'<small>比較 {r["samples"]}/{r["expected"]} 時点</small></article>' for r in rising)
-    if not cards:
-        cards = '<p>該当タイトルなし</p>' if rows else '<p>比較データなし</p>'
-    ranking = ''.join(f'<tr><td>{i}</td><th scope="row">{esc(g["name"])}</th>'
-                      f'<td>{g["viewers"]:,}</td></tr>' for i, g in enumerate(snapshot['games'], 1))
-    compare = ''.join(f'<tr><th scope="row">{esc(r["name"])}</th><td>{number(r["before"])}</td>'
-                      f'<td>{number(r["after"])}</td><td>{r["change"]:+,.1f}</td><td>{percent(r)}</td>'
-                      f'<td>{r["samples"]}/{r["expected"]}</td></tr>' for r in rows)
-    comparison = ('<div class="scroll"><table><thead><tr><th>ゲーム</th><th>比較元</th><th>今回</th>'
-                  '<th>増減人数</th><th>増減率</th><th>比較件数／予定件数</th></tr></thead>'
-                  f'<tbody>{compare}</tbody></table></div>') if rows else '<p>比較データなし</p>'
+    def table(headings, widths, records, row_header, kind):
+        cell_style = ('padding:8px 6px;line-height:1.4;text-align:right;vertical-align:top;border-bottom:1px solid #30354a;'
+                      'font-variant-numeric:tabular-nums;'
+                      'white-space:normal;word-wrap:break-word;overflow-wrap:anywhere;')
+        header = ''.join(f'<th scope="col" width="{width}%" style="{cell_style}border-bottom:0;width:{width}%;'
+                         f'{"text-align:left;" if i == row_header else ""}">{esc(label)}</th>'
+                         for i, (label, width) in enumerate(zip(headings, widths)))
+        body = []
+        for record in records:
+            cells = []
+            for i, (label, value) in enumerate(zip(headings, record)):
+                tag = 'th' if i == row_header else 'td'
+                scope = ' scope="row"' if i == row_header else ''
+                style = cell_style + ('text-align:left;' if i == row_header else '')
+                mobile_label = (f'<span class="mobile-label" style="display:none;">{esc(label)}：</span>'
+                                if kind == 'comparison' and i != row_header else '')
+                cells.append(f'<{tag}{scope} style="{style}">{mobile_label}{esc(str(value))}</{tag}>')
+            body.append('<tr>' + ''.join(cells) + '</tr>')
+        return (f'<table class="report-table {kind}" width="100%" style="width:100%;table-layout:fixed;border-collapse:collapse;">'
+                f'<thead style="position:sticky;top:0;background-color:#202337;box-shadow:0 1px 0 #46415e;"><tr>{header}</tr></thead><tbody>{"".join(body)}</tbody></table>')
+    def render_cards(selected, category):
+        card_class = 'rise' if category == 'normal' else 'single-rise rise'
+        return ''.join(f'<article class="{card_class}" style="background-color:#202337;border:1px solid #46415e;border-radius:14px;padding:20px;">'
+                       f'<h3>{esc(r["name"])}</h3><strong>+{number(r["change"])} 人</strong>'
+                       f'<p>{percent(r)}</p><small>{esc(rise_detail(r))}</small></article>' for r in selected)
+    sections = []
+    for group_label, group_rows in rising_groups(snapshot, history):
+        normal = rising_titles(group_rows)
+        single = rising_titles(group_rows, 'single')
+        normal_cards = render_cards(normal, 'normal')
+        if not normal_cards:
+            normal_cards = '<p>該当タイトルなし</p>' if group_rows else '<p>比較データなし</p>'
+        single_section = ('<h4>単一配信者による急増</h4><div class="cards">'
+                          + render_cards(single, 'single') + '</div>') if single else ''
+        unknown_count = sum(r['category'] == 'unavailable' for r in group_rows)
+        unknown_note = (f'<p class="note" style="color:#b5bfd2;">判定不可：{unknown_count}タイトル（配信者別内訳が未取得、または除外後の増加率が算出不可）</p>'
+                        if unknown_count else '')
+        sections.append(f'<section><h3>{esc(group_label)}</h3><h4>通常の急上昇3選</h4>'
+                        f'<div class="cards">{normal_cards}</div>{single_section}{unknown_note}</section>')
+    cards = ''.join(sections)
+    ranking = render_ranking(snapshot['games'], ranking_changes(snapshot, history))
+    ranking_note = ('<p class="note" style="color:#b5bfd2;font-size:13px;">前日23時からの順位変動：- 同順位／↑ 上昇／↓ 下降／★ 新規（前日の記録がない場合も含む）</p>'
+                    if slot.hour == 23 else '')
+    comparison = table(['ゲーム', '比較元', '今回', '増減人数', '増減率', '比較件数／予定件数'],
+                       [30, 14, 14, 14, 14, 14],
+                       [(r['name'], number(r['before']), number(r['after']), f'{r["change"]:+,.1f}',
+                         percent(r), f'{r["samples"]}/{r["expected"]}') for r in rows], 0, 'comparison') if rows else '<p>比較データなし</p>'
+    awaiting_comparison = slot.hour in (21, 23) and not rows
+    comparison_note = ('<p class="note" style="color:#b5bfd2;margin:12px 0;">前日比較データは蓄積中です</p>'
+                       if awaiting_comparison else '')
+    comparison_sections = '' if awaiting_comparison else (
+        '<h2>急上昇タイトル3選</h2><p>各枠最大3タイトル · 全体・最多寄与配信者の除外後とも25％以上・増加人数順</p>'
+        f'{cards}<h2>{esc(label)}</h2>'
+        '<p class="note">両方に記録がある同じ時刻だけで比較。取得範囲外・欠測は0で補完しません。件数不足の比較は部分集計です。</p>'
+        f'{comparison}')
+    chip_style = ('display:inline-block;border:1px solid #46415e;border-radius:999px;padding:4px 12px;'
+                  'margin:0 8px 8px 0;background-color:#202337;color:#e9edf5;font-size:13px;line-height:1.4;')
+    chips = [f"表示 {min(len(snapshot['games']), DISPLAY_LIMIT):,} / 集計 {len(snapshot['games']):,} タイトル",
+             f"{snapshot['included_stream_count']:,}配信（ゲーム集計対象）",
+             f'{slot:%Y年%m月%d日 %H:%M} JST']
+    metadata = ''.join(f'<span class="meta-chip" style="{chip_style}">{esc(text)}</span>' for text in chips)
+    font_family = '"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif'
+    inline_font = esc(font_family)
     return f'''<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Twitchゲーム視聴者数 | {slot:%Y-%m-%d %H:%M}</title>
 <style>
-:root{{color-scheme:dark}}*{{box-sizing:border-box}}body{{margin:0;background:#10121b;color:#e9edf5;font:16px/1.7 system-ui,sans-serif}}
+:root{{color-scheme:dark}}*{{box-sizing:border-box}}body{{margin:0;background:#10121b;color:#e9edf5;font:16px/1.7 {font_family}}}
 main{{max-width:1100px;margin:auto;padding:32px 20px}}h1{{font-size:clamp(1.6rem,4vw,2.7rem)}}h2{{margin-top:40px}}
-small,.note{{color:#b5bfd2}}.badge{{color:#c8b7ff;letter-spacing:.08em}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}}
+small,.note{{color:#b5bfd2}}.badge{{color:#c8b7ff;letter-spacing:.08em}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:16px}}
 article{{background:#202337;border:1px solid #46415e;border-radius:14px;padding:20px}}article h3{{margin-top:0}}strong{{font-size:1.5rem;color:#90e0bc}}
-.scroll{{overflow:auto}}table{{border-collapse:collapse;width:100%;white-space:nowrap}}th,td{{padding:12px;text-align:right;border-bottom:1px solid #30354a}}
-th[scope=row],thead th:first-child{{text-align:left}}thead{{background:#202337}}tbody tr:hover{{background:#1d2232}}footer{{margin-top:40px;color:#b5bfd2}}
-</style></head><body bgcolor="#10121b" style="margin:0;padding:0;background-color:#10121b;color:#e9edf5;font:16px/1.7 system-ui,sans-serif;">
-<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#10121b" style="width:100%;border-collapse:collapse;background-color:#10121b;color:#e9edf5;white-space:normal;">
-<tr><td bgcolor="#10121b" align="left" style="padding:0;border:0;text-align:left;background-color:#10121b;color:#e9edf5;font:16px/1.7 system-ui,sans-serif;">
-<main style="max-width:1100px;margin:0 auto;padding:32px 20px;background-color:#10121b;color:#e9edf5;">
+.report-table thead{{background:#202337}}.report-table tbody tr:hover{{background:#1d2232}}footer{{margin-top:40px;color:#b5bfd2}}
+@media screen and (max-width:600px){{
+main{{padding:20px 12px!important}}h1{{font-size:24px}}.cards{{display:block}}.rise{{margin-bottom:12px}}
+.ranking .viewers{{flex-direction:column;align-items:stretch!important;gap:4px!important}}
+.ranking .bar-track{{order:2;width:100%!important;max-width:100%!important;height:4px!important;flex:none!important}}
+.ranking .viewer-number{{text-align:right}}
+.comparison,.comparison tbody,.comparison tr,.comparison th[scope=row],.comparison td{{display:block;width:100%!important;box-sizing:border-box}}
+.comparison thead{{display:none}}.comparison tr{{margin-bottom:16px;border:1px solid #30354a}}
+.comparison td{{text-align:left!important}}.comparison .mobile-label{{display:inline!important;font-weight:bold}}
+}}
+</style></head><body bgcolor="#10121b" style="margin:0;padding:0;background-color:#10121b;color:#e9edf5;font:16px/1.7 {inline_font};">
+<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#10121b" style="width:100%;table-layout:fixed;border-collapse:collapse;background-color:#10121b;color:#e9edf5;white-space:normal;">
+<tr><td bgcolor="#10121b" align="left" style="padding:0;border:0;text-align:left;background-color:#10121b;color:#e9edf5;font:16px/1.7 {inline_font};">
+<main style="max-width:1100px;box-sizing:border-box;margin:0 auto;padding:32px 20px;background-color:#10121b;color:#e9edf5;word-wrap:break-word;overflow-wrap:anywhere;">
 <p class="badge">TWITCH / GAME VIEWERS</p><h1>ゲーム別 視聴者数ランキング（上位配信から集計）</h1>
-<p>{slot:%Y年%m月%d日 %H:%M} 日本時間 · {len(snapshot['games'])} タイトル</p>
-<p>取得配信数：{snapshot["stream_count"]:,} / 最大1,000件 · ゲーム集計対象：{snapshot["included_stream_count"]:,}配信</p>
-<p class="note">収集開始：{esc(snapshot['started_at'])}<br>収集終了：{esc(snapshot['finished_at'])}</p>
-<h2>急上昇タイトル3選</h2><p>{esc(label)} · 1.5倍以上（増加率50％以上）・増加人数順</p><div class="cards">{cards}</div>
-<h2>{esc(label)}</h2><p class="note">両方に記録がある同じ時刻だけで比較。取得範囲外・欠測は0で補完しません。件数不足の比較は部分集計です。</p>{comparison}
-<h2>全タイトル</h2><div class="scroll"><table><thead><tr><th>順位</th><th>ゲームタイトル</th><th>同時視聴者数（人）</th></tr></thead><tbody>{ranking}</tbody></table></div>
-<footer>Twitch公式APIの取得期間中の集計値です。配信別視聴者数の合計で、ユニーク人数ではありません。<br>
-Twitch全体の上位最大1,000配信のうちIGDB ID登録済みゲームが対象です。ゲームの全配信の合計ではありません。ページ取得中の変動により順位・人数に誤差が生じ得ます。</footer>
+<div class="metadata" style="margin:16px 0 0;">{metadata}</div>
+<p class="note" style="font-size:13px;color:#b5bfd2;margin:0;">取得配信数：{snapshot["stream_count"]:,} / 最大1,000件</p>
+{comparison_note}
+{comparison_sections}
+<h2>タイトルランキング（上位100件）</h2>{ranking_note}{ranking}
+<footer style="margin-top:40px;color:#b5bfd2;font-size:13px;">Twitch公式APIの取得期間中の集計値です。配信別視聴者数の合計で、ユニーク人数ではありません。<br>
+Twitch全体の上位最大1,000配信のうちIGDB ID登録済みゲームが対象です。ゲームの全配信の合計ではありません。ページ取得中の変動により順位・人数に誤差が生じ得ます。
+<p class="note" style="color:#b5bfd2;">収集開始：{esc(snapshot['started_at'])}<br>収集終了：{esc(snapshot['finished_at'])}</p></footer>
 </main></td></tr></table></body></html>'''
 
 
@@ -285,14 +469,19 @@ def validate_snapshot(snapshot):
             raise ValueError
         if not isinstance(games, list) or len(games) > included or (not games and included):
             raise ValueError
+        normalized_games = []
         for game in games:
             if not isinstance(game['id'], str) or not game['id'] or not isinstance(game['name'], str):
                 raise ValueError
             if type(game['viewers']) is not int or game['viewers'] < 0:
                 raise ValueError
+            item = dict(id=game['id'], name=game['name'], viewers=game['viewers'])
+            if 'broadcasters' in game:
+                audience.validate_counts(game['broadcasters'], game['viewers'])
+                item['broadcasters'] = dict(game['broadcasters'])
+            normalized_games.append(item)
         return dict(**{key: stamp.isoformat() for key, stamp in times.items()},
-                    games=[dict(id=g['id'], name=g['name'], viewers=g['viewers']) for g in games],
-                    stream_count=total, included_stream_count=included)
+                    games=normalized_games, stream_count=total, included_stream_count=included)
     except (ValueError, TypeError, KeyError, AttributeError):
         raise ViewerError('取得記録の日時・ゲーム・視聴者数が不正です。保存を中断します。') from None
 
@@ -326,6 +515,13 @@ class Store:
                         CHECK (typeof(viewer_count) = 'integer' AND viewer_count >= 0),
                     PRIMARY KEY (run_id, game_id)
                 );
+                CREATE TABLE IF NOT EXISTS game_audiences (
+                    run_id INTEGER NOT NULL,
+                    game_id TEXT NOT NULL,
+                    counts_json TEXT NOT NULL,
+                    PRIMARY KEY (run_id, game_id),
+                    FOREIGN KEY (run_id, game_id) REFERENCES viewer_counts(run_id, game_id) ON DELETE CASCADE
+                );
                 CREATE TABLE IF NOT EXISTS mail_deliveries (
                     run_id INTEGER NOT NULL REFERENCES collection_runs(id) ON DELETE CASCADE,
                     recipient TEXT NOT NULL,
@@ -355,6 +551,10 @@ class Store:
         self.db.executemany(
             'INSERT INTO viewer_counts (run_id, game_id, game_title, viewer_count) VALUES (?, ?, ?, ?)',
             [(cursor.lastrowid, g['id'], g['name'], g['viewers']) for g in snapshot['games']])
+        self.db.executemany(
+            'INSERT INTO game_audiences (run_id, game_id, counts_json) VALUES (?, ?, ?)',
+            [(cursor.lastrowid, g['id'], json.dumps(g['broadcasters'], ensure_ascii=False, sort_keys=True))
+             for g in snapshot['games'] if 'broadcasters' in g])
 
     def save(self, snapshot):
         try:
@@ -373,8 +573,14 @@ class Store:
                     'SELECT run_id, game_id, game_title, viewer_count FROM viewer_counts '
                     'ORDER BY run_id, viewer_count DESC, game_id'):
                 snapshots[rid]['games'].append(dict(id=gid, name=title, viewers=count))
+            indexed_games = {(rid, g['id']): g for rid, s in snapshots.items() for g in s['games']}
+            for rid, gid, counts in self.db.execute('SELECT run_id, game_id, counts_json FROM game_audiences'):
+                game = indexed_games[(rid, gid)]
+                decoded = json.loads(counts)
+                audience.validate_counts(decoded, game['viewers'])
+                game['broadcasters'] = decoded
             return list(snapshots.values())
-        except (sqlite3.Error, KeyError):
+        except (sqlite3.Error, KeyError, ValueError, TypeError):
             raise ViewerError('SQLiteの履歴を読み取れません。データベースの状態を確認してください。') from None
 
     def restore(self, snapshots):
@@ -477,16 +683,26 @@ def send_reports(root, store, history, slot):
         if delivery['recipient'] not in config['recipients'] or delivery['status'] not in ('pending', 'failed'):
             continue
         snapshot = indexed[delivery['scheduled_at']]
-        rows, label = report_rows(snapshot, history)
-        rising = rising_titles(rows)
         lines = [f"Twitchゲーム視聴者数 {delivery['scheduled_at']}",
                  f"上位最大1,000配信から集計。取得 {snapshot['stream_count']}件、ゲーム集計対象 {snapshot['included_stream_count']}件",
-                 'ゲーム全体の視聴者数ではありません。', label, '急上昇タイトル3選（1.5倍以上・増加率50％以上、増加人数順）']
-        lines.extend(f"{r['name']}: +{r['change']:,.1f}人（比較 {r['samples']}/{r['expected']}時点）" for r in rising)
-        if not rising:
-            lines.append('該当タイトルなし' if rows else '比較データなし')
-        lines.append('全タイトル')
-        lines.extend(f"{i}. {g['name']}: {g['viewers']:,}人" for i, g in enumerate(snapshot['games'], 1))
+                 'ゲーム全体の視聴者数ではありません。',
+                 '急上昇タイトル3選（各枠最大3タイトル・全体と最多寄与配信者の除外後とも25％以上、増加人数順）']
+        for group_label, group_rows in rising_groups(snapshot, history):
+            lines.append(group_label)
+            normal = rising_titles(group_rows)
+            single = rising_titles(group_rows, 'single')
+            lines.append('通常の急上昇3選')
+            lines.extend(f"{r['name']}: +{r['change']:,.1f}人 / {rise_detail(r)}" for r in normal)
+            if not normal:
+                lines.append('該当タイトルなし' if group_rows else '比較データなし')
+            if single:
+                lines.append('単一配信者による急増')
+                lines.extend(f"{r['name']}: +{r['change']:,.1f}人 / {rise_detail(r)}" for r in single)
+            unknown_count = sum(r['category'] == 'unavailable' for r in group_rows)
+            if unknown_count:
+                lines.append(f'判定不可：{unknown_count}タイトル（配信者別内訳が未取得、または除外後の増加率が算出不可）')
+        lines.append('タイトルランキング（上位100件）')
+        lines.extend(f"{i}. {g['name']}: {g['viewers']:,}人" for i, g in enumerate(snapshot['games'][:DISPLAY_LIMIT], 1))
         lines.append('全体の前日比較と取得日時はHTML本文・添付HTMLをご覧ください。')
         message = mailer.make_message(config['username'], delivery['recipient'], delivery['scheduled_at'],
                                       '\n'.join(lines), render_html(snapshot, history))

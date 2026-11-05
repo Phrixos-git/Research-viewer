@@ -9,10 +9,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 import viewer
+import audience
 
 
 def game(gid, viewers, name=None):
-    return {'id': gid, 'name': name or gid, 'viewers': viewers}
+    result = dict(id=gid, name=name or gid, viewers=viewers)
+    if type(viewers) is int and viewers >= 0:
+        result['broadcasters'] = {'left': viewers // 2, 'right': viewers - viewers // 2}
+    return result
 
 
 def sample(day, hour, *games):
@@ -21,7 +25,8 @@ def sample(day, hour, *games):
 
 
 def collection(games):
-    return dict(games=games, stream_count=len(games), included_stream_count=len(games))
+    count = sum(len(g.get('broadcasters', {})) for g in games)
+    return dict(games=games, stream_count=count, included_stream_count=count)
 
 
 class FakeClient(viewer.Client):
@@ -38,7 +43,7 @@ class FakeClient(viewer.Client):
 
 
 def stream(sid, gid='a', count=10):
-    return dict(id=str(sid), game_id=gid, game_name=gid, viewer_count=count)
+    return dict(id=str(sid), user_id=f'user-{sid}', game_id=gid, game_name=gid, viewer_count=count)
 
 
 def metadata(*ids):
@@ -52,7 +57,8 @@ class CollectionTests(unittest.TestCase):
         c = FakeClient(pages + [metadata('a')])
         result = c.collect()
         self.assertEqual(result['stream_count'], 1000)
-        self.assertEqual(result['games'], [game('a', sum(range(1001, 2001)), 'A')])
+        self.assertEqual(result['games'], [dict(game('a', sum(range(1001, 2001)), 'A'),
+                                             broadcasters={f'user-{i}': 2000-i for i in range(1000)})])
         self.assertEqual(sum(path == '/streams' for path, _ in c.calls), 10)
         self.assertTrue(all('game_id' not in params and params['type'] == 'live' for path, params in c.calls if path == '/streams'))
 
@@ -64,7 +70,8 @@ class CollectionTests(unittest.TestCase):
         ])
         result = c.collect()
         self.assertEqual(result, dict(stream_count=3, included_stream_count=3,
-                                     games=[game('b', 40, 'B'), game('a', 30, 'A')]))
+                                     games=[dict(game('b', 40, 'B'), broadcasters={'user-s2': 40}),
+                                            dict(game('a', 30, 'A'), broadcasters={'user-s1': 20, 'user-s3': 10})]))
         self.assertEqual(c.calls[1][1]['after'], 'next')
 
     def test_non_game_streams_count_toward_limit_and_are_not_replaced(self):
@@ -72,7 +79,8 @@ class CollectionTests(unittest.TestCase):
             dict(data=[stream(1, 'chat', 100), stream(2, '', 90), stream(3, 'a', 80), stream(4, 'b', 70)], pagination={}),
             dict(data=[dict(id='chat', name='Chat', igdb_id=''), dict(id='a', name='A', igdb_id='1')]),
         ])
-        self.assertEqual(c.collect(3), dict(stream_count=3, included_stream_count=1, games=[game('a', 80, 'A')]))
+        self.assertEqual(c.collect(3), dict(stream_count=3, included_stream_count=1,
+                                          games=[dict(game('a', 80, 'A'), broadcasters={'user-3': 80})]))
 
     def test_no_streams_and_no_eligible_games_are_successful_empty_results(self):
         c = FakeClient([dict(data=[], pagination={})])
@@ -147,20 +155,23 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(rows[0]['change'], 20)
         self.assertIn('21', label)
 
-    def test_risers_require_50_percent_increase_and_exclude_zero_baseline(self):
-        rows = [viewer.comparison_row(str(i), str(i), before, after, 1, 1)
-                for i, (before, after) in enumerate([(100, 149), (100, 150), (100, 200), (0, 500), (100, 100)])]
+    def test_risers_require_25_percent_after_exclusion_and_exclude_zero_baseline(self):
+        def row(gid, before, after):
+            result = viewer.comparison_row(gid, gid, before, after, 1, 1)
+            result.update(audience.classify_game(game(gid, before), game(gid, after)))
+            return result
+        rows = [row(str(i), before, after)
+                for i, (before, after) in enumerate([(400, 499), (400, 500), (400, 800), (0, 500), (400, 400)])]
         self.assertEqual([r['id'] for r in viewer.rising_titles(rows)], ['2', '1'])
-        rows += [viewer.comparison_row('large', 'large', 1000, 1500, 1, 1),
-                 viewer.comparison_row('small', 'small', 1, 10, 1, 1)]
+        rows += [row('large', 1000, 1500), row('small', 1, 10)]
         self.assertEqual([r['id'] for r in viewer.rising_titles(rows)], ['large', '2', '1'])
 
-    def test_html_features_exactly_50_percent_increase(self):
-        old = sample('2026-11-04', 19, game('a', 100))
-        new = sample('2026-11-04', 20, game('a', 150))
+    def test_html_features_exactly_25_percent_increase(self):
+        old = sample('2026-11-04', 19, game('a', 400))
+        new = sample('2026-11-04', 20, game('a', 500))
         page = viewer.render_html(new, [old, new])
         self.assertIn('class="rise"', page)
-        self.assertIn('1.5倍以上', page)
+        self.assertIn('25％', page)
 
     def test_html_escapes_names_and_does_not_invent_three_risers(self):
         s = sample('2026-11-04', 20, game('a', 100, '<script>alert(1)</script>'))
@@ -446,7 +457,7 @@ class PublicationTests(unittest.TestCase):
             for hour in [21, 23]:
                 report = (root / f'output/2026-11-04/{hour}.html').read_text()
                 self.assertIn('前日比較', report)
-                self.assertEqual(report.count('class="rise"'), 3)
+                self.assertEqual(report.count('class="rise"'), (hour - 18) * 3)
             self.assertNotIn('sqlite', self.git(remote, 'ls-tree', '-r', '--name-only', 'refs/heads/main'))
             self.assertEqual(self.git(root, 'status', '--porcelain'), '')
             self.assertEqual(self.git(root, 'rev-parse', 'HEAD'), self.git(remote, 'rev-parse', 'refs/heads/main'))

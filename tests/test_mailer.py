@@ -26,7 +26,8 @@ def configure(root):
 def sample(hour=23):
     stamp = f'2026-11-04T{hour:02d}:00:00+09:00'
     return dict(scheduled_at=stamp, started_at=stamp, finished_at=stamp,
-                games=[dict(id='a', name='ゲームA', viewers=100)], stream_count=1, included_stream_count=1)
+                games=[dict(id='a', name='ゲームA', viewers=100, broadcasters={'left': 50, 'right': 50})],
+                stream_count=2, included_stream_count=2)
 
 
 class MailSettingsTests(unittest.TestCase):
@@ -93,6 +94,63 @@ class MessageTests(unittest.TestCase):
             self.assertTrue(kwargs['context'].check_hostname)
             smtp.return_value.login.assert_called_once_with('sender@gmail.com', 'private-app-password')
             self.assertEqual(smtp.return_value.send_message.call_args.kwargs['to_addrs'], ['one@example.com'])
+
+    def test_responsive_report_preserves_data_and_inline_widths_in_mail_parts(self):
+        class Tags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.elements = []
+                self.cells = []
+                self.in_report = False
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                self.elements.append((tag, attrs))
+                if tag == 'table':
+                    self.in_report = 'report-table' in attrs.get('class', '').split()
+                if self.in_report and tag in ('th', 'td') and attrs.get('scope') != 'col':
+                    self.cells.append(attrs)
+            def handle_endtag(self, tag):
+                if tag == 'table':
+                    self.in_report = False
+
+        snapshot = sample()
+        snapshot['games'][0]['name'] = 'LongGameTitle' * 20 + '<&>'
+        previous = sample()
+        previous['scheduled_at'] = '2026-11-03T23:00:00+09:00'
+        previous['games'][0]['viewers'] = 50
+        previous['games'][0]['broadcasters'] = {'left': 25, 'right': 25}
+        report = viewer.render_html(snapshot, [previous, snapshot])
+        message = mailer.make_message('sender@gmail.com', 'one@example.com', snapshot['scheduled_at'], 'text', report)
+        for part in [message.get_body(preferencelist=('html',)), *message.iter_attachments()]:
+            content = part.get_content()
+            self.assertIn('@media screen and (max-width:600px)', content)
+            self.assertIn('.comparison td', content)
+            self.assertIn('.mobile-label', content)
+            parser = Tags()
+            parser.feed(re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.S))
+            tables = [attrs for tag, attrs in parser.elements if tag == 'table']
+            self.assertEqual(len(tables), 3)  # Outer layout, comparison, ranking.
+            for attrs in tables:
+                if 'ranking' in attrs.get('class', '').split():
+                    self.assertNotIn('width', attrs)
+                    self.assertIn('max-width:100%', attrs['style'])
+                    self.assertIn('table-layout:auto', attrs['style'])
+                else:
+                    self.assertEqual(attrs['width'], '100%')
+                    self.assertIn('table-layout:fixed', attrs['style'])
+            self.assertEqual(len(parser.cells), 10)
+            for attrs in parser.cells:
+                styles = dict(part.split(':', 1) for part in attrs['style'].split(';') if ':' in part)
+                if styles.get('width') == '4.5em':
+                    self.assertEqual(styles['white-space'], 'nowrap')
+                else:
+                    self.assertEqual(styles['white-space'], 'normal')
+                    self.assertEqual(styles['word-wrap'], 'break-word')
+                    self.assertEqual(styles['overflow-wrap'], 'anywhere')
+            for label in ['比較元', '今回', '増減人数', '増減率', '比較件数／予定件数']:
+                self.assertIn(label + '：', content)
+            self.assertIn('LongGameTitle' * 20 + '&lt;&amp;&gt;', content)
+            self.assertIn('+100.0%', content)
 
     def test_auth_failure_and_interrupted_send_are_distinguished_without_secret_logging(self):
         msg = mailer.make_message('sender@gmail.com', 'one@example.com', sample()['scheduled_at'], 'text', '<p>HTML</p>')
