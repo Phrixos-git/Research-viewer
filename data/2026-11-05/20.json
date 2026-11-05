@@ -1,0 +1,619 @@
+{
+  "scheduled_at": "2026-11-05T20:00:00+09:00",
+  "started_at": "2026-11-05T20:00:00.940149+09:00",
+  "finished_at": "2026-11-05T20:00:04.767662+09:00",
+  "games": [
+    {
+      "id": "18122",
+      "name": "World of Warcraft",
+      "viewers": 280376
+    },
+    {
+      "id": "21779",
+      "name": "League of Legends",
+      "viewers": 64494
+    },
+    {
+      "id": "771448419",
+      "name": "AION 2",
+      "viewers": 64079
+    },
+    {
+      "id": "2067181260",
+      "name": "The Legend of Zelda: Ocarina of Time",
+      "viewers": 39619
+    },
+    {
+      "id": "27471",
+      "name": "Minecraft",
+      "viewers": 29176
+    },
+    {
+      "id": "32982",
+      "name": "Grand Theft Auto V",
+      "viewers": 22904
+    },
+    {
+      "id": "511224",
+      "name": "Apex Legends",
+      "viewers": 20030
+    },
+    {
+      "id": "250649084",
+      "name": "SILENT HILL 2",
+      "viewers": 18330
+    },
+    {
+      "id": "515025",
+      "name": "Overwatch",
+      "viewers": 12474
+    },
+    {
+      "id": "491931",
+      "name": "Escape from Tarkov",
+      "viewers": 10575
+    },
+    {
+      "id": "33214",
+      "name": "Fortnite",
+      "viewers": 9930
+    },
+    {
+      "id": "516575",
+      "name": "VALORANT",
+      "viewers": 8597
+    },
+    {
+      "id": "2132205352",
+      "name": "Deadlock",
+      "viewers": 8147
+    },
+    {
+      "id": "1514404776",
+      "name": "Potato Please",
+      "viewers": 7704
+    },
+    {
+      "id": "19619",
+      "name": "Tibia",
+      "viewers": 7059
+    },
+    {
+      "id": "138585",
+      "name": "Hearthstone",
+      "viewers": 6930
+    },
+    {
+      "id": "1478650472",
+      "name": "Call of Duty: Modern Warfare 4",
+      "viewers": 6820
+    },
+    {
+      "id": "366412048",
+      "name": "Probably Stolen",
+      "viewers": 6697
+    },
+    {
+      "id": "459931",
+      "name": "Old School RuneScape",
+      "viewers": 6269
+    },
+    {
+      "id": "491487",
+      "name": "Dead by Daylight",
+      "viewers": 6192
+    },
+    {
+      "id": "29452",
+      "name": "Virtual Casino",
+      "viewers": 6171
+    },
+    {
+      "id": "513143",
+      "name": "Teamfight Tactics",
+      "viewers": 5712
+    },
+    {
+      "id": "306019403",
+      "name": "Phantom Blade Zero",
+      "viewers": 5547
+    },
+    {
+      "id": "27546",
+      "name": "World of Tanks",
+      "viewers": 5541
+    },
+    {
+      "id": "123184772",
+      "name": "EA Sports FC 27",
+      "viewers": 5428
+    },
+    {
+      "id": "957103328",
+      "name": "Grand Theft Auto: Vice City - The Definitive Edition",
+      "viewers": 4806
+    },
+    {
+      "id": "493549",
+      "name": "Frostpunk",
+      "viewers": 4203
+    },
+    {
+      "id": "737987407",
+      "name": "Enshrouded",
+      "viewers": 3715
+    },
+    {
+      "id": "513181",
+      "name": "Genshin Impact",
+      "viewers": 3450
+    },
+    {
+      "id": "185606059",
+      "name": "Fatal Fury: City of the Wolves",
+      "viewers": 3437
+    },
+    {
+      "id": "500188",
+      "name": "Hunt: Showdown 1896",
+      "viewers": 3245
+    },
+    {
+      "id": "24376",
+      "name": "Tales Runner",
+      "viewers": 2867
+    },
+    {
+      "id": "1448964995",
+      "name": "ARKNIGHTS: ENDFIELD",
+      "viewers": 2824
+    },
+    {
+      "id": "1913410799",
+      "name": "Total War: WARHAMMER III",
+      "viewers": 2695
+    },
+    {
+      "id": "493057",
+      "name": "PUBG: BATTLEGROUNDS",
+      "viewers": 2523
+    },
+    {
+      "id": "115977",
+      "name": "The Witcher 3: Wild Hunt",
+      "viewers": 2313
+    },
+    {
+      "id": "687129551",
+      "name": "Trackmania",
+      "viewers": 2224
+    },
+    {
+      "id": "498592",
+      "name": "I'm Only Sleeping",
+      "viewers": 2121
+    },
+    {
+      "id": "401587136",
+      "name": "Arena Breakout: Infinite",
+      "viewers": 1937
+    },
+    {
+      "id": "464339927",
+      "name": "ARC Raiders",
+      "viewers": 1722
+    },
+    {
+      "id": "2106425216",
+      "name": "Gray Zone Warfare",
+      "viewers": 1721
+    },
+    {
+      "id": "1282866981",
+      "name": "Delta Force",
+      "viewers": 1627
+    },
+    {
+      "id": "1931693784",
+      "name": "Pokémon Champions",
+      "viewers": 1541
+    },
+    {
+      "id": "515186",
+      "name": "Crimson Desert",
+      "viewers": 1467
+    },
+    {
+      "id": "1264310518",
+      "name": "Marvel Rivals",
+      "viewers": 1413
+    },
+    {
+      "id": "1277738947",
+      "name": "Sephiria",
+      "viewers": 1357
+    },
+    {
+      "id": "11988",
+      "name": "FINAL FANTASY VII",
+      "viewers": 1350
+    },
+    {
+      "id": "504463",
+      "name": "Tom Clancy's The Division 2",
+      "viewers": 1344
+    },
+    {
+      "id": "502829",
+      "name": "R2 Online: Reign of Revolution",
+      "viewers": 1342
+    },
+    {
+      "id": "386821",
+      "name": "Black Desert",
+      "viewers": 1310
+    },
+    {
+      "id": "1753787976",
+      "name": "ROB RUN",
+      "viewers": 1261
+    },
+    {
+      "id": "510056",
+      "name": "Epic Seven",
+      "viewers": 1255
+    },
+    {
+      "id": "602040818",
+      "name": "NBA 2K27",
+      "viewers": 1207
+    },
+    {
+      "id": "417528",
+      "name": "Albion Online",
+      "viewers": 1196
+    },
+    {
+      "id": "763313082",
+      "name": "Duet Night Abyss",
+      "viewers": 1177
+    },
+    {
+      "id": "494184",
+      "name": "Mobile Legends: Bang Bang",
+      "viewers": 1131
+    },
+    {
+      "id": "1960720223",
+      "name": "SILENT HILL: townfall",
+      "viewers": 1095
+    },
+    {
+      "id": "499634",
+      "name": "Crypto",
+      "viewers": 1065
+    },
+    {
+      "id": "55453844",
+      "name": "Street Fighter 6",
+      "viewers": 1065
+    },
+    {
+      "id": "1898040946",
+      "name": "How to Fish",
+      "viewers": 1032
+    },
+    {
+      "id": "983841243",
+      "name": "Off The Grid",
+      "viewers": 1019
+    },
+    {
+      "id": "1441208453",
+      "name": "Once Human",
+      "viewers": 1009
+    },
+    {
+      "id": "512953",
+      "name": "ELDEN RING",
+      "viewers": 935
+    },
+    {
+      "id": "1496435078",
+      "name": "Casino Simulator 2024",
+      "viewers": 810
+    },
+    {
+      "id": "213930085",
+      "name": "Honkai: Star Rail",
+      "viewers": 810
+    },
+    {
+      "id": "494436328",
+      "name": "The Bazaar",
+      "viewers": 798
+    },
+    {
+      "id": "203540012",
+      "name": "Disney/Pixar Toy Story and Beyond!",
+      "viewers": 783
+    },
+    {
+      "id": "1510789205",
+      "name": "Planet Zoo 2",
+      "viewers": 766
+    },
+    {
+      "id": "20596",
+      "name": "Dofus",
+      "viewers": 761
+    },
+    {
+      "id": "1106985046",
+      "name": "RoadCraft",
+      "viewers": 753
+    },
+    {
+      "id": "1435206302",
+      "name": "Slay the Spire II",
+      "viewers": 745
+    },
+    {
+      "id": "2005329090",
+      "name": "Jinro Metropolis",
+      "viewers": 742
+    },
+    {
+      "id": "114524791",
+      "name": "Shadowverse: Worlds Beyond",
+      "viewers": 697
+    },
+    {
+      "id": "881333982",
+      "name": "Wilderdark",
+      "viewers": 664
+    },
+    {
+      "id": "1000178598",
+      "name": "Football Manager 27",
+      "viewers": 647
+    },
+    {
+      "id": "71375",
+      "name": "Star Citizen",
+      "viewers": 637
+    },
+    {
+      "id": "508455",
+      "name": "Valheim",
+      "viewers": 625
+    },
+    {
+      "id": "669337588",
+      "name": "Microsoft Flight Simulator 2024",
+      "viewers": 606
+    },
+    {
+      "id": "344035090",
+      "name": "Kingdom Come: Deliverance II",
+      "viewers": 594
+    },
+    {
+      "id": "1414860634",
+      "name": "The Binding of Isaac: Repentance",
+      "viewers": 565
+    },
+    {
+      "id": "263490",
+      "name": "Rust",
+      "viewers": 555
+    },
+    {
+      "id": "538054672",
+      "name": "TEKKEN 8",
+      "viewers": 551
+    },
+    {
+      "id": "516588",
+      "name": "Rise Online",
+      "viewers": 545
+    },
+    {
+      "id": "490292",
+      "name": "DARK SOULS III",
+      "viewers": 532
+    },
+    {
+      "id": "518764",
+      "name": "Kukoro: Stream Chat Games",
+      "viewers": 532
+    },
+    {
+      "id": "2104758320",
+      "name": "The First Descendant",
+      "viewers": 485
+    },
+    {
+      "id": "2009321156",
+      "name": "Dark and Darker",
+      "viewers": 463
+    },
+    {
+      "id": "743214338",
+      "name": "Brotato",
+      "viewers": 462
+    },
+    {
+      "id": "29056",
+      "name": "Knight Online",
+      "viewers": 429
+    },
+    {
+      "id": "1967084783",
+      "name": "Marvel's Spider-Man 2",
+      "viewers": 411
+    },
+    {
+      "id": "779192097",
+      "name": "Fire Emblem: Fortune's Weave",
+      "viewers": 401
+    },
+    {
+      "id": "512710",
+      "name": "Call of Duty: Warzone",
+      "viewers": 396
+    },
+    {
+      "id": "1630174498",
+      "name": "SULFUR",
+      "viewers": 395
+    },
+    {
+      "id": "65632",
+      "name": "DayZ",
+      "viewers": 382
+    },
+    {
+      "id": "599619814",
+      "name": "Casino Jackpot",
+      "viewers": 379
+    },
+    {
+      "id": "12839",
+      "name": "Heroes of Might and Magic III: The Restoration of Erathia",
+      "viewers": 376
+    },
+    {
+      "id": "1357871551",
+      "name": "The Blood of Dawnwalker",
+      "viewers": 353
+    },
+    {
+      "id": "491878",
+      "name": "BeamNG.drive",
+      "viewers": 347
+    },
+    {
+      "id": "32502",
+      "name": "World of Warships",
+      "viewers": 330
+    },
+    {
+      "id": "510389",
+      "name": "Shakes and Fidget",
+      "viewers": 328
+    },
+    {
+      "id": "1804231074",
+      "name": "MapleStory Worlds",
+      "viewers": 324
+    },
+    {
+      "id": "2094865572",
+      "name": "SMITE 2",
+      "viewers": 318
+    },
+    {
+      "id": "19976",
+      "name": "MapleStory",
+      "viewers": 312
+    },
+    {
+      "id": "171019267",
+      "name": "Hull Rupture",
+      "viewers": 305
+    },
+    {
+      "id": "499003",
+      "name": "VRChat",
+      "viewers": 303
+    },
+    {
+      "id": "30921",
+      "name": "Rocket League",
+      "viewers": 299
+    },
+    {
+      "id": "509511",
+      "name": "Marbles on Stream",
+      "viewers": 293
+    },
+    {
+      "id": "997367275",
+      "name": "Pokémon Legends: Z-A",
+      "viewers": 293
+    },
+    {
+      "id": "743893402",
+      "name": "WARDOGS",
+      "viewers": 280
+    },
+    {
+      "id": "65876",
+      "name": "Cyberpunk 2077",
+      "viewers": 276
+    },
+    {
+      "id": "628949545",
+      "name": "Goblin Cleanup",
+      "viewers": 273
+    },
+    {
+      "id": "27103",
+      "name": "Sid Meier's Civilization V",
+      "viewers": 270
+    },
+    {
+      "id": "515349",
+      "name": "Lineage II",
+      "viewers": 267
+    },
+    {
+      "id": "493959",
+      "name": "Red Dead Redemption II",
+      "viewers": 263
+    },
+    {
+      "id": "460630",
+      "name": "Rainbow Six Siege",
+      "viewers": 262
+    },
+    {
+      "id": "1923236616",
+      "name": "Magic Chess: Go Go",
+      "viewers": 261
+    },
+    {
+      "id": "19554",
+      "name": "iRacing",
+      "viewers": 259
+    },
+    {
+      "id": "489170",
+      "name": "DARK SOULS II: Scholar of the First Sin",
+      "viewers": 259
+    },
+    {
+      "id": "722422729",
+      "name": "$cam With Your Friends",
+      "viewers": 255
+    },
+    {
+      "id": "160739900",
+      "name": "LurkBait Twitch Fishing",
+      "viewers": 253
+    },
+    {
+      "id": "329951934",
+      "name": "Pokémon Community Game",
+      "viewers": 253
+    },
+    {
+      "id": "511295",
+      "name": "Predecessor",
+      "viewers": 247
+    }
+  ],
+  "stream_count": 1000,
+  "included_stream_count": 759
+}
