@@ -4,7 +4,7 @@ import argparse
 import audience
 from collections import defaultdict
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import fcntl
 import html
 import json
@@ -26,6 +26,7 @@ JST = ZoneInfo('Asia/Tokyo')
 REMOTE = 'https://github.com/Phrixos-git/Research-viewer.git'
 HOURS = range(19, 24)
 DISPLAY_LIMIT = 100
+PRODUCTION_START = date(2026, 11, 8)
 ROOT = Path(__file__).resolve().parent
 
 
@@ -103,7 +104,7 @@ class Client:
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ViewerError('取得上限は1〜1000件で指定してください。')
         streams, seen = [], set()
-        for row in self.pages('/streams', type='live'):
+        for row in self.pages('/streams', type='live', language='ja'):
             if (not isinstance(row, dict) or not isinstance(row.get('id'), str) or not row['id']
                     or not isinstance(row.get('game_id'), str)
                     or not isinstance(row.get('user_id'), str) or not row['user_id']
@@ -161,7 +162,17 @@ def scheduled_time(snapshot):
     return datetime.fromisoformat(snapshot['scheduled_at']).astimezone(JST)
 
 
+def history_for_day(history, day):
+    official = day >= PRODUCTION_START
+    return [s for s in history if (scheduled_time(s).date() >= PRODUCTION_START) == official]
+
+
+def collection_scope(snapshot):
+    return '日本語配信' if scheduled_time(snapshot).date() >= PRODUCTION_START else '全言語配信'
+
+
 def compare_period(history, day, end_hour):
+    history = history_for_day(history, day)
     indexed = {(scheduled_time(s).date(), scheduled_time(s).hour): s for s in history}
     pairs = defaultdict(list)
     names = {}
@@ -191,6 +202,7 @@ def comparison_row(gid, name, before, after, samples, expected):
 
 def report_rows(snapshot, history):
     slot = scheduled_time(snapshot)
+    history = history_for_day(history, slot.date())
     if slot.hour in (21, 23):
         return compare_period(history, slot.date(), slot.hour), f'前日比較：両日の19〜{slot.hour}時の平均同時視聴者数'
     previous = next((s for s in history if scheduled_time(s) == slot - timedelta(hours=1)), None)
@@ -210,6 +222,7 @@ def rising_titles(rows, category='normal'):
 
 def rising_groups(snapshot, history):
     slot = scheduled_time(snapshot)
+    history = history_for_day(history, slot.date())
     daily = slot.hour in (21, 23)
     indexed = {scheduled_time(s): s for s in history}
     indexed[slot] = snapshot
@@ -241,6 +254,7 @@ def rise_detail(row):
 
 def ranking_changes(snapshot, history):
     slot = scheduled_time(snapshot)
+    history = history_for_day(history, slot.date())
     if slot.hour != 23:
         return None
     prev_rank = {}
@@ -263,7 +277,7 @@ def ranking_changes(snapshot, history):
     return result
 
 
-def render_ranking(games, changes=None):
+def render_ranking(games, changes=None, averages=None):
     """Render a game viewers ranking table as an HTML string.
 
     games: list of dicts with "id", "name", "viewers"; order is preserved.
@@ -277,8 +291,13 @@ def render_ranking(games, changes=None):
         "border-bottom:1px solid #30354a;vertical-align:middle;"
     )
     change_style = cell + 'text-align:center;'
+    viewers_style = 'display:flex;align-items:center;justify-content:flex-start;gap:16px;'
+    number_style = 'flex:1;min-width:0;text-align:right;'
+    track_style = 'display:inline-block;width:140px;max-width:45%;flex:0 0 140px;'
     change_header = (f'<th scope="col" style="{change_style}border-bottom:0;">前日比</th>'
                      if changes is not None else '')
+    average_header = (f'<th scope="col" style="{cell}border-bottom:0;text-align:right;">19〜23時平均の前日増減（人）</th>'
+                      if averages is not None else '')
     rank_style = ('width:4.5em;min-width:4.5em;text-align:center;'
                   'white-space:nowrap;word-wrap:normal;overflow-wrap:normal;')
     badge = {
@@ -298,8 +317,17 @@ def render_ranking(games, changes=None):
         number = f"{v:,}"
         row_color = {1: '#24243a', 2: '#222739', 3: '#29243a'}.get(idx)
         row_style = f'background-color:{row_color};' if row_color else ''
-        change_cell = (f'<td class="rank-change" style="{change_style}">{html.escape(changes[g["id"]])}</td>'
-                       if changes is not None else '')
+        change_cell = ''
+        if changes is not None:
+            mark = changes[g['id']]
+            color = {'↑': 'color:#ff8a9a;', '↓': 'color:#80bfff;', '★': 'color:#ffd166;'}.get(mark, '')
+            change_cell = f'<td class="rank-change" style="{change_style}{color}">{html.escape(mark)}</td>'
+        average_cell = ''
+        if averages is not None:
+            average = averages.get(g['id'])
+            value = (f'{average["change"]:+,.1f}<br><small>比較 {average["samples"]}/{average["expected"]}</small>'
+                     if average is not None else '比較データなし')
+            average_cell = f'<td class="average-change" style="{cell}text-align:right;font-variant-numeric:tabular-nums;">{value}</td>'
         rows.append(
             f'<tr style="{row_style}">'
             f'<td style="{cell}{rank_style}font-variant-numeric:tabular-nums;">'
@@ -307,14 +335,14 @@ def render_ranking(games, changes=None):
             "</td>"
             f'<th scope="row" style="{cell}min-width:0;text-align:left;">{name}</th>'
             f'<td style="{cell}text-align:right;font-variant-numeric:tabular-nums;">'
-            '<div class="viewers" style="display:flex;align-items:center;justify-content:flex-start;gap:10px;">'
-            f'<span class="viewer-number" style="flex:1;min-width:0;text-align:right;">{number}</span>'
-            '<span class="bar-track" aria-hidden="true" style="display:inline-block;width:140px;max-width:45%;height:8px;flex:0 0 140px;">'
+            f'<div class="viewers" style="{viewers_style}">'
+            f'<span class="viewer-number" style="{number_style}">{number}</span>'
+            f'<span class="bar-track" aria-hidden="true" style="{track_style}height:8px;">'
             f'<span class="viewer-bar" aria-hidden="true" style="display:block;height:100%;width:{pct}%;background-color:#5b4a9e;background-image:linear-gradient(to right,#5b4a9e,#90e0bc33);border-radius:4px;"></span>'
             "</span>"
             "</div>"
             "</td>"
-            f'{change_cell}'
+            f'{average_cell}{change_cell}'
             "</tr>"
         )
     return (
@@ -322,8 +350,11 @@ def render_ranking(games, changes=None):
         '<thead style="position:sticky;top:0;background-color:#202337;box-shadow:0 1px 0 #46415e;"><tr>'
         f'<th scope="col" style="{cell}border-bottom:0;{rank_style}">順位</th>'
         f'<th scope="col" style="{cell}border-bottom:0;text-align:left;">ゲームタイトル</th>'
-        f'<th scope="col" style="{cell}border-bottom:0;text-align:right;">同時視聴者数（人）</th>'
-        f'{change_header}'
+        f'<th scope="col" style="{cell}border-bottom:0;text-align:right;">'
+        f'<div class="viewers-heading" style="{viewers_style}">'
+        f'<span class="viewer-heading-text" style="{number_style}">同時視聴者数（人）</span>'
+        f'<span class="viewer-heading-spacer" aria-hidden="true" style="{track_style}"></span></div></th>'
+        f'{average_header}{change_header}'
         "</tr></thead>"
         "<tbody>" + "".join(rows) + "</tbody>"
         "</table>"
@@ -334,6 +365,9 @@ def render_html(snapshot, history):
     esc = html.escape
     rows, label = report_rows(snapshot, history)
     slot = scheduled_time(snapshot)
+    scope = collection_scope(snapshot)
+    test_note = ('<p class="note" style="color:#ffce80;">テストデータ（全言語配信）。正式取得は2026年11月8日から開始します。</p>'
+                 if slot.date() < PRODUCTION_START else '')
     def number(value):
         return f'{value:,.1f}'.removesuffix('.0')
     def percent(row):
@@ -364,7 +398,8 @@ def render_html(snapshot, history):
                        f'<h3>{esc(r["name"])}</h3><strong>+{number(r["change"])} 人</strong>'
                        f'<p>{percent(r)}</p><small>{esc(rise_detail(r))}</small></article>' for r in selected)
     sections = []
-    for group_label, group_rows in rising_groups(snapshot, history):
+    groups = rising_groups(snapshot, history) if slot.hour not in (21, 23) else []
+    for group_label, group_rows in groups:
         normal = rising_titles(group_rows)
         single = rising_titles(group_rows, 'single')
         normal_cards = render_cards(normal, 'normal')
@@ -378,19 +413,34 @@ def render_html(snapshot, history):
         sections.append(f'<section><h3>{esc(group_label)}</h3><h4>通常の急上昇3選</h4>'
                         f'<div class="cards">{normal_cards}</div>{single_section}{unknown_note}</section>')
     cards = ''.join(sections)
-    ranking = render_ranking(snapshot['games'], ranking_changes(snapshot, history))
+    averages = {r['id']: r for r in rows} if slot.hour == 23 else None
+    ranking = render_ranking(snapshot['games'], ranking_changes(snapshot, history), averages)
     ranking_note = ('<p class="note" style="color:#b5bfd2;font-size:13px;">前日23時からの順位変動：- 同順位／↑ 上昇／↓ 下降／★ 新規（前日の記録がない場合も含む）</p>'
                     if slot.hour == 23 else '')
-    comparison = table(['ゲーム', '比較元', '今回', '増減人数', '増減率', '比較件数／予定件数'],
+    if slot.hour == 23:
+        ranking_note += ('<p class="note" style="color:#b5bfd2;font-size:13px;">平均の前日増減は両日に記録がある同じ時刻だけで計算。'
+                         '比較件数/予定5件を併記し、5件未満は部分集計です。取得範囲外・欠測は0で補完しません。</p>')
+    comparison_rows = rows
+    empty_comparison = '比較データなし'
+    if slot.hour == 23:
+        comparison_rows = sorted((r for r in rows if r['percent'] is not None),
+                                 key=lambda r: (-r['percent'], r['id']))[:10]
+        label += '（増加率順 Top10）'
+        empty_comparison = '増加率を算出できる比較データなし'
+    previous_slot = slot - (timedelta(days=1) if slot.hour in (21, 23) else timedelta(hours=1))
+    comparison = table(['ゲーム', f'前回（{previous_slot.month}/{previous_slot.day}）',
+                        f'今回（{slot.month}/{slot.day}）', '増減人数', '増減率', '比較件数／予定件数'],
                        [30, 14, 14, 14, 14, 14],
                        [(r['name'], number(r['before']), number(r['after']), f'{r["change"]:+,.1f}',
-                         percent(r), f'{r["samples"]}/{r["expected"]}') for r in rows], 0, 'comparison') if rows else '<p>比較データなし</p>'
+                         percent(r), f'{r["samples"]}/{r["expected"]}') for r in comparison_rows], 0, 'comparison') if comparison_rows else f'<p>{empty_comparison}</p>'
     awaiting_comparison = slot.hour in (21, 23) and not rows
     comparison_note = ('<p class="note" style="color:#b5bfd2;margin:12px 0;">前日比較データは蓄積中です</p>'
                        if awaiting_comparison else '')
-    comparison_sections = '' if awaiting_comparison else (
+    rising_section = (
         '<h2>急上昇タイトル3選</h2><p>各枠最大3タイトル · 全体・最多寄与配信者の除外後とも25％以上・増加人数順</p>'
-        f'{cards}<h2>{esc(label)}</h2>'
+        f'{cards}') if groups else ''
+    comparison_sections = '' if awaiting_comparison else (
+        f'{rising_section}<h2>{esc(label)}</h2>'
         '<p class="note">両方に記録がある同じ時刻だけで比較。取得範囲外・欠測は0で補完しません。件数不足の比較は部分集計です。</p>'
         f'{comparison}')
     chip_style = ('display:inline-block;border:1px solid #46415e;border-radius:999px;padding:4px 12px;'
@@ -415,6 +465,7 @@ main{{padding:20px 12px!important}}h1{{font-size:24px}}.cards{{display:block}}.r
 .ranking .viewers{{flex-direction:column;align-items:stretch!important;gap:4px!important}}
 .ranking .bar-track{{order:2;width:100%!important;max-width:100%!important;height:4px!important;flex:none!important}}
 .ranking .viewer-number{{text-align:right}}
+.ranking .viewer-heading-spacer{{display:none!important}}
 .comparison,.comparison tbody,.comparison tr,.comparison th[scope=row],.comparison td{{display:block;width:100%!important;box-sizing:border-box}}
 .comparison thead{{display:none}}.comparison tr{{margin-bottom:16px;border:1px solid #30354a}}
 .comparison td{{text-align:left!important}}.comparison .mobile-label{{display:inline!important;font-weight:bold}}
@@ -424,13 +475,14 @@ main{{padding:20px 12px!important}}h1{{font-size:24px}}.cards{{display:block}}.r
 <tr><td bgcolor="#10121b" align="left" style="padding:0;border:0;text-align:left;background-color:#10121b;color:#e9edf5;font:16px/1.7 {inline_font};">
 <main style="max-width:1100px;box-sizing:border-box;margin:0 auto;padding:32px 20px;background-color:#10121b;color:#e9edf5;word-wrap:break-word;overflow-wrap:anywhere;">
 <p class="badge">TWITCH / GAME VIEWERS</p><h1>ゲーム別 視聴者数ランキング（上位配信から集計）</h1>
+{test_note}
 <div class="metadata" style="margin:16px 0 0;">{metadata}</div>
-<p class="note" style="font-size:13px;color:#b5bfd2;margin:0;">取得配信数：{snapshot["stream_count"]:,} / 最大1,000件</p>
+<p class="note" style="font-size:13px;color:#b5bfd2;margin:0;">集計対象：{scope}の上位最大1,000件 · 取得配信数：{snapshot["stream_count"]:,} / 最大1,000件</p>
 {comparison_note}
 {comparison_sections}
 <h2>タイトルランキング（上位100件）</h2>{ranking_note}{ranking}
 <footer style="margin-top:40px;color:#b5bfd2;font-size:13px;">Twitch公式APIの取得期間中の集計値です。配信別視聴者数の合計で、ユニーク人数ではありません。<br>
-Twitch全体の上位最大1,000配信のうちIGDB ID登録済みゲームが対象です。ゲームの全配信の合計ではありません。ページ取得中の変動により順位・人数に誤差が生じ得ます。
+{scope}の上位最大1,000配信のうちIGDB ID登録済みゲームが対象です。ゲームの全配信の合計ではありません。配信言語は所在地を表しません。ページ取得中の変動により順位・人数に誤差が生じ得ます。
 <p class="note" style="color:#b5bfd2;">収集開始：{esc(snapshot['started_at'])}<br>収集終了：{esc(snapshot['finished_at'])}</p></footer>
 </main></td></tr></table></body></html>'''
 
@@ -669,6 +721,7 @@ def export_reports(root, history, slot):
 def send_reports(root, store, history, slot):
     if slot.hour != 23:
         return
+    history = history_for_day(history, slot.astimezone(JST).date())
     try:
         config = mailer.load_settings(root)
     except mailer.MailError as exc:
@@ -682,9 +735,11 @@ def send_reports(root, store, history, slot):
     for delivery in store.mail_status():
         if delivery['recipient'] not in config['recipients'] or delivery['status'] not in ('pending', 'failed'):
             continue
+        if delivery['scheduled_at'] not in indexed:
+            continue
         snapshot = indexed[delivery['scheduled_at']]
         lines = [f"Twitchゲーム視聴者数 {delivery['scheduled_at']}",
-                 f"上位最大1,000配信から集計。取得 {snapshot['stream_count']}件、ゲーム集計対象 {snapshot['included_stream_count']}件",
+                 f"{collection_scope(snapshot)}の上位最大1,000配信から集計。取得 {snapshot['stream_count']}件、ゲーム集計対象 {snapshot['included_stream_count']}件",
                  'ゲーム全体の視聴者数ではありません。',
                  '急上昇タイトル3選（各枠最大3タイトル・全体と最多寄与配信者の除外後とも25％以上、増加人数順）']
         for group_label, group_rows in rising_groups(snapshot, history):
@@ -760,20 +815,24 @@ def publish(root, expected_remote=REMOTE):
 
 def run(root, now=None, publish_result=True):
     now = now or datetime.now(JST)
+    if now.astimezone(JST).date() < PRODUCTION_START:
+        print('正式取得は2026-11-08（JST）19時からです。開始日前の収集を見送ります。')
+        return False
     slot = slot_for(now)
     if slot is None:
         print('対象時刻外または10分以上の開始遅延のため、収集を見送ります。')
         return False
     with collection_lock(root), Store(root) as store:
-        history = store.history()
-        if not history and any((root / 'data').glob('*/*.json')):
+        history = history_for_day(store.history(), slot.date())
+        if not history and any(p.parent.name >= PRODUCTION_START.isoformat()
+                               for p in (root / 'data').glob('*/*.json')):
             raise ViewerError('SQLiteが空ですがJSON履歴があります。restoreで復元してから収集してください。')
         if not any(scheduled_time(s) == slot for s in history):
             started = datetime.now(JST).isoformat()
             result = client_from_config(root).collect()
             store.save(dict(scheduled_at=slot.isoformat(), started_at=started,
                             finished_at=datetime.now(JST).isoformat(), **result))
-            history = store.history()
+            history = history_for_day(store.history(), slot.date())
         export_reports(root, history, slot)
         errors = []
         if publish_result:

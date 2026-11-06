@@ -11,6 +11,18 @@ def snapshot(day, ids, hour=23):
 
 
 class RankChangeTests(unittest.TestCase):
+    def test_arrows_have_inline_red_and_blue_colors(self):
+        before = snapshot(4, ['same', 'fall', 'rise'])
+        after = snapshot(5, ['same', 'rise', 'fall', 'new'])
+        page = viewer.render_html(after, [before, after])
+        cells = re.findall(r'<td class="rank-change" style="([^"]*)">(.*?)</td>', page)
+        self.assertEqual([mark for _, mark in cells], ['-', '↑', '↓', '★'])
+        for (style, _), color in zip(cells, [None, '#ff8a9a', '#80bfff', '#ffd166']):
+            if color:
+                self.assertIn(f'color:{color};', style)
+            else:
+                self.assertNotIn('color:', style)
+
     def test_same_rise_fall_new_match_game_ids(self):
         before = snapshot(4, ['same','fall','rise','gone'])
         after = snapshot(5, ['same','rise','fall','new'])

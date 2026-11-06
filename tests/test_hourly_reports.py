@@ -22,13 +22,13 @@ def history():
 
 
 class HourlyReportTests(unittest.TestCase):
-    def test_html_has_three_risers_per_hour_and_keeps_average_table(self):
+    def test_html_omits_hourly_risers_and_keeps_average_table(self):
         records = history()
-        for hour, count in ((21, 9), (23, 15)):
+        for hour in (21, 23):
             page = viewer.render_html(records[5+hour-19], records)
-            self.assertEqual(page.count('class="rise"'), count)
+            self.assertNotIn('class="rise"', page)
             for h in range(19, hour+1):
-                self.assertIn(f'前日比較：{h}時', page)
+                self.assertNotIn(f'前日比較：{h}時', page)
             self.assertIn('平均同時視聴者数', page)
             self.assertIn('Game &lt;4&gt;', page)
 
@@ -46,9 +46,9 @@ class HourlyReportTests(unittest.TestCase):
         attachment = next(message.iter_attachments()).get_content()
         for h in range(19, 24):
             self.assertIn(f'前日比較：{h}時', plain)
-            self.assertIn(f'前日比較：{h}時', html)
+            self.assertNotIn(f'前日比較：{h}時', html)
         self.assertEqual(plain.count('Game <4>: +400.0人'), 5)
-        self.assertEqual(html.count('class="rise"'), 15)
+        self.assertNotIn('class="rise"', html)
         self.assertEqual(html.rstrip(), attachment.rstrip())
 
     def test_missing_zero_threshold_tie_and_normal_hours(self):
@@ -59,10 +59,11 @@ class HourlyReportTests(unittest.TestCase):
         self.assertEqual([r['id'] for r in viewer.rising_titles(groups[0][1])], ['a','b'])
         self.assertEqual(groups[1][1], [])
         page = viewer.render_html(end, [before, after, end])
-        self.assertIn('比較データなし', page)
+        self.assertNotIn('前日比較：20時', page)
+        self.assertIn('平均同時視聴者数', page)
         valid_before = snapshot(4,21,[dict(id='x',name='x',viewers=100)])
         valid_after = snapshot(5,21,[dict(id='x',name='x',viewers=100)])
-        self.assertIn('該当タイトルなし', viewer.render_html(valid_after,[valid_before,valid_after]))
+        self.assertNotIn('該当タイトルなし', viewer.render_html(valid_after,[valid_before,valid_after]))
         for hour in (19,20,22):
             s = snapshot(5,hour,[dict(id='x',name='x',viewers=200)])
             prev = snapshot(5,hour-1,[dict(id='x',name='x',viewers=100)])

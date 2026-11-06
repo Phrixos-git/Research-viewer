@@ -24,7 +24,7 @@ def configure(root):
 
 
 def sample(hour=23):
-    stamp = f'2026-11-04T{hour:02d}:00:00+09:00'
+    stamp = f'2026-11-11T{hour:02d}:00:00+09:00'
     return dict(scheduled_at=stamp, started_at=stamp, finished_at=stamp,
                 games=[dict(id='a', name='ゲームA', viewers=100, broadcasters={'left': 50, 'right': 50})],
                 stream_count=2, included_stream_count=2)
@@ -61,7 +61,7 @@ class MessageTests(unittest.TestCase):
         files = list(message.iter_attachments())
         self.assertEqual(len(files), 1)
         self.assertEqual(files[0].get_content().strip(), '<html>ゲームA</html>')
-        self.assertEqual(files[0].get_filename(), 'twitch-2026-11-04-23.html')
+        self.assertEqual(files[0].get_filename(), 'twitch-2026-11-11-23.html')
 
     def test_report_remains_dark_when_mail_client_removes_head_styles(self):
         class Tags(HTMLParser):
@@ -116,7 +116,7 @@ class MessageTests(unittest.TestCase):
         snapshot = sample()
         snapshot['games'][0]['name'] = 'LongGameTitle' * 20 + '<&>'
         previous = sample()
-        previous['scheduled_at'] = '2026-11-03T23:00:00+09:00'
+        previous['scheduled_at'] = '2026-11-10T23:00:00+09:00'
         previous['games'][0]['viewers'] = 50
         previous['games'][0]['broadcasters'] = {'left': 25, 'right': 25}
         report = viewer.render_html(snapshot, [previous, snapshot])
@@ -138,7 +138,7 @@ class MessageTests(unittest.TestCase):
                 else:
                     self.assertEqual(attrs['width'], '100%')
                     self.assertIn('table-layout:fixed', attrs['style'])
-            self.assertEqual(len(parser.cells), 10)
+            self.assertEqual(len(parser.cells), 11)  # Six comparison cells and five ranking cells.
             for attrs in parser.cells:
                 styles = dict(part.split(':', 1) for part in attrs['style'].split(';') if ':' in part)
                 if styles.get('width') == '4.5em':
@@ -147,7 +147,7 @@ class MessageTests(unittest.TestCase):
                     self.assertEqual(styles['white-space'], 'normal')
                     self.assertEqual(styles['word-wrap'], 'break-word')
                     self.assertEqual(styles['overflow-wrap'], 'anywhere')
-            for label in ['比較元', '今回', '増減人数', '増減率', '比較件数／予定件数']:
+            for label in ['前回（11/10）', '今回（11/11）', '増減人数', '増減率', '比較件数／予定件数']:
                 self.assertIn(label + '：', content)
             self.assertIn('LongGameTitle' * 20 + '&lt;&amp;&gt;', content)
             self.assertIn('+100.0%', content)
@@ -186,14 +186,14 @@ class DeliveryTests(unittest.TestCase):
             self.run_at(root, 23)
             self.run_at(root, 23)
             self.assertEqual(send.call_count, 2)
-            report = (root / 'output/2026-11-04/23.html').read_text()
+            report = (root / 'output/2026-11-11/23.html').read_text()
             for call in send.call_args_list:
                 msg = call.args[1]
                 self.assertEqual(list(msg.iter_attachments())[0].get_content().rstrip('\n'), report.rstrip('\n'))
                 self.assertIn('比較データなし', msg.get_body(preferencelist=('plain',)).get_content())
             with viewer.Store(root) as store:
                 self.assertEqual([row['status'] for row in store.mail_status()], ['sent', 'sent'])
-            self.assertNotIn('example.com', (root / 'data/2026-11-04/23.json').read_text())
+            self.assertNotIn('example.com', (root / 'data/2026-11-11/23.json').read_text())
 
     def test_partial_failure_retries_only_the_failed_recipient(self):
         with tempfile.TemporaryDirectory() as td, patch('mailer.send') as send:
@@ -239,7 +239,7 @@ class DeliveryTests(unittest.TestCase):
             self.run_at(root, 23)
             configure(root)
             with viewer.Store(root) as store:
-                viewer.send_reports(root, store, store.history(), datetime.fromisoformat('2026-11-05T19:00:00+09:00'))
+                viewer.send_reports(root, store, store.history(), datetime.fromisoformat('2026-11-12T19:00:00+09:00'))
             send.assert_not_called()
 
     def test_failed_mail_is_not_retried_outside_23(self):
@@ -250,7 +250,7 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaises(viewer.ViewerError):
                 self.run_at(root, 23)
             with viewer.Store(root) as store:
-                viewer.send_reports(root, store, store.history(), datetime.fromisoformat('2026-11-05T19:00:00+09:00'))
+                viewer.send_reports(root, store, store.history(), datetime.fromisoformat('2026-11-12T19:00:00+09:00'))
             self.assertEqual(send.call_count, 2)
 
     def test_removed_recipient_is_not_retried(self):

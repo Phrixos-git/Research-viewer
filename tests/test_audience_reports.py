@@ -24,6 +24,8 @@ def records(with_single=True, known=True):
 class AudienceReportTests(unittest.TestCase):
     def test_each_frame_has_3_without_overlap_and_evidence(self):
         before,after=records()
+        before['scheduled_at'] = '2026-11-05T21:00:00+09:00'
+        after['scheduled_at'] = '2026-11-05T22:00:00+09:00'
         page=viewer.render_html(after,[before,after])
         self.assertEqual(page.count('class="rise"'),3)
         self.assertEqual(page.count('class="single-rise rise"'),3)
@@ -38,8 +40,12 @@ class AudienceReportTests(unittest.TestCase):
 
     def test_no_single_frame_without_candidates_and_missing_is_not_selected(self):
         before,after=records(with_single=False)
+        before['scheduled_at'] = '2026-11-05T21:00:00+09:00'
+        after['scheduled_at'] = '2026-11-05T22:00:00+09:00'
         self.assertNotIn('<h4>単一配信者による急増</h4>',viewer.render_html(after,[before,after]))
         before,after=records(known=False)
+        before['scheduled_at'] = '2026-11-05T21:00:00+09:00'
+        after['scheduled_at'] = '2026-11-05T22:00:00+09:00'
         page=viewer.render_html(after,[before,after])
         self.assertIn('判定不可',page)
         self.assertNotIn('class="rise"',page)
@@ -59,6 +65,7 @@ class AudienceReportTests(unittest.TestCase):
         self.assertIn('除外後',plain)
         self.assertIn('Normal <3>',plain)
         self.assertIn('Single <3>',plain)
-        self.assertEqual(page.count('class="rise"'),3)
-        self.assertEqual(page.count('class="single-rise rise"'),3)
+        self.assertNotIn('class="rise"',page)
+        self.assertNotIn('class="single-rise rise"',page)
+        self.assertNotIn('判定不可',page)
         self.assertEqual(page.rstrip(),next(message.iter_attachments()).get_content().rstrip())

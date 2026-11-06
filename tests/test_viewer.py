@@ -60,7 +60,7 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(result['games'], [dict(game('a', sum(range(1001, 2001)), 'A'),
                                              broadcasters={f'user-{i}': 2000-i for i in range(1000)})])
         self.assertEqual(sum(path == '/streams' for path, _ in c.calls), 10)
-        self.assertTrue(all('game_id' not in params and params['type'] == 'live' for path, params in c.calls if path == '/streams'))
+        self.assertTrue(all('game_id' not in params and params['type'] == 'live' and params.get('language') == 'ja' for path, params in c.calls if path == '/streams'))
 
     def test_fewer_than_1000_and_duplicate_streams_across_pages(self):
         c = FakeClient([
@@ -121,12 +121,12 @@ class CollectionTests(unittest.TestCase):
 
 class ComparisonTests(unittest.TestCase):
     def test_period_uses_matched_hours_and_game_ids_not_positions(self):
-        h = [sample('2026-11-03', 19, game('a', 100), game('b', 500)),
-             sample('2026-11-03', 20, game('a', 200)),
-             sample('2026-11-04', 19, game('b', 700), game('a', 200)),
-             sample('2026-11-04', 20, game('b', 900), game('a', 400)),
-             sample('2026-11-04', 21, game('a', 999), game('new', 9000))]
-        rows = viewer.compare_period(h, date(2026, 11, 4), 21)
+        h = [sample('2026-11-10', 19, game('a', 100), game('b', 500)),
+             sample('2026-11-10', 20, game('a', 200)),
+             sample('2026-11-11', 19, game('b', 700), game('a', 200)),
+             sample('2026-11-11', 20, game('b', 900), game('a', 400)),
+             sample('2026-11-11', 21, game('a', 999), game('new', 9000))]
+        rows = viewer.compare_period(h, date(2026, 11, 11), 21)
         by_id = {r['id']: r for r in rows}
         self.assertEqual(set(by_id), {'a', 'b'})
         self.assertEqual(by_id['a']['before'], 150)
@@ -137,21 +137,21 @@ class ComparisonTests(unittest.TestCase):
         self.assertTrue(all(r['expected'] == 3 for r in rows))
 
     def test_zero_baseline_and_no_previous_data(self):
-        h = [sample('2026-11-03', 19, game('a', 0)), sample('2026-11-04', 19, game('a', 10))]
-        row = viewer.compare_period(h, date(2026, 11, 4), 21)[0]
+        h = [sample('2026-11-10', 19, game('a', 0)), sample('2026-11-11', 19, game('a', 10))]
+        row = viewer.compare_period(h, date(2026, 11, 11), 21)[0]
         self.assertIsNone(row['percent'])
-        self.assertEqual(viewer.compare_period(h, date(2026, 11, 5), 21), [])
+        self.assertEqual(viewer.compare_period(h, date(2026, 11, 12), 21), [])
 
     def test_23_does_not_use_future_or_other_dates(self):
-        h = [sample('2026-11-03', h, game('a', 100)) for h in range(19, 24)]
-        h += [sample('2026-11-04', h, game('a', 200)) for h in range(19, 24)]
-        row = viewer.compare_period(h, date(2026, 11, 4), 23)[0]
+        h = [sample('2026-11-10', h, game('a', 100)) for h in range(19, 24)]
+        h += [sample('2026-11-11', h, game('a', 200)) for h in range(19, 24)]
+        row = viewer.compare_period(h, date(2026, 11, 11), 23)[0]
         self.assertEqual((row['samples'], row['expected'], row['change']), (5, 5, 100))
 
     def test_normal_rise_needs_immediately_previous_hour(self):
-        s = sample('2026-11-04', 22, game('a', 30))
-        self.assertEqual(viewer.report_rows(s, [sample('2026-11-04', 20, game('a', 1)), s])[0], [])
-        rows, label = viewer.report_rows(s, [sample('2026-11-04', 21, game('a', 10)), s])
+        s = sample('2026-11-11', 22, game('a', 30))
+        self.assertEqual(viewer.report_rows(s, [sample('2026-11-11', 20, game('a', 1)), s])[0], [])
+        rows, label = viewer.report_rows(s, [sample('2026-11-11', 21, game('a', 10)), s])
         self.assertEqual(rows[0]['change'], 20)
         self.assertIn('21', label)
 
@@ -167,15 +167,15 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual([r['id'] for r in viewer.rising_titles(rows)], ['large', '2', '1'])
 
     def test_html_features_exactly_25_percent_increase(self):
-        old = sample('2026-11-04', 19, game('a', 400))
-        new = sample('2026-11-04', 20, game('a', 500))
+        old = sample('2026-11-11', 19, game('a', 400))
+        new = sample('2026-11-11', 20, game('a', 500))
         page = viewer.render_html(new, [old, new])
         self.assertIn('class="rise"', page)
         self.assertIn('25％', page)
 
     def test_html_escapes_names_and_does_not_invent_three_risers(self):
-        s = sample('2026-11-04', 20, game('a', 100, '<script>alert(1)</script>'))
-        html = viewer.render_html(s, [sample('2026-11-04', 19, game('a', 50)), s])
+        s = sample('2026-11-11', 20, game('a', 100, '<script>alert(1)</script>'))
+        html = viewer.render_html(s, [sample('2026-11-11', 19, game('a', 50)), s])
         self.assertNotIn('<script>', html)
         self.assertIn('&lt;script&gt;', html)
         self.assertEqual(html.count('class="rise"'), 1)
@@ -184,9 +184,9 @@ class ComparisonTests(unittest.TestCase):
 
 class SchedulingTests(unittest.TestCase):
     def test_slots_use_jst_and_reject_late_or_off_hours(self):
-        now = datetime.fromisoformat('2026-11-04T12:04:00+00:00')
+        now = datetime.fromisoformat('2026-11-11T12:04:00+00:00')
         self.assertEqual(viewer.slot_for(now).hour, 21)
-        for stamp in ['2026-11-04T18:00:00+09:00', '2026-11-04T23:11:00+09:00']:
+        for stamp in ['2026-11-11T18:00:00+09:00', '2026-11-11T23:11:00+09:00']:
             self.assertIsNone(viewer.slot_for(datetime.fromisoformat(stamp)))
 
     def test_working_directory_is_unquoted_but_exec_arguments_are_quoted(self):
@@ -222,7 +222,7 @@ class StorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, patch('viewer.client_from_config') as factory:
             factory.return_value.collect.side_effect = viewer.ViewerError('failed')
             with self.assertRaises(viewer.ViewerError):
-                viewer.run(Path(td), datetime.fromisoformat('2026-11-04T21:00:00+09:00'), publish_result=False)
+                viewer.run(Path(td), datetime.fromisoformat('2026-11-11T21:00:00+09:00'), publish_result=False)
             self.assertEqual(list(Path(td).glob('data/**/*.json')), [])
             with viewer.Store(Path(td)) as store:
                 self.assertEqual(store.history(), [])
@@ -230,11 +230,11 @@ class StorageTests(unittest.TestCase):
     def test_same_slot_is_not_recollected_and_preserves_comparison_file(self):
         with tempfile.TemporaryDirectory() as td, patch('viewer.client_from_config') as factory:
             factory.return_value.collect.return_value = collection([game('a', 20)])
-            stamp = datetime.fromisoformat('2026-11-04T21:00:00+09:00')
+            stamp = datetime.fromisoformat('2026-11-11T21:00:00+09:00')
             viewer.run(Path(td), stamp, publish_result=False)
             viewer.run(Path(td), stamp, publish_result=False)
             self.assertEqual(factory.return_value.collect.call_count, 1)
-            self.assertTrue((Path(td) / 'output/2026-11-04/21.html').exists())
+            self.assertTrue((Path(td) / 'output/2026-11-11/21.html').exists())
             self.assertTrue((Path(td) / 'output/index.html').exists())
 
 
@@ -242,8 +242,8 @@ class SQLiteTests(unittest.TestCase):
     def test_persistence_and_title_history_with_stable_game_id(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            old = sample('2026-11-03', 21, game('a', 100, '旧タイトル'))
-            new = sample('2026-11-04', 21, game('a', 200, '新タイトル'))
+            old = sample('2026-11-10', 21, game('a', 100, '旧タイトル'))
+            new = sample('2026-11-11', 21, game('a', 200, '新タイトル'))
             with viewer.Store(root) as store:
                 store.save(old)
                 store.save(new)
@@ -251,7 +251,7 @@ class SQLiteTests(unittest.TestCase):
             with viewer.Store(root) as store:
                 history = store.history()
                 self.assertEqual(history, [old, new])
-                row = viewer.compare_period(history, date(2026, 11, 4), 21)[0]
+                row = viewer.compare_period(history, date(2026, 11, 11), 21)[0]
                 self.assertEqual((row['id'], row['name'], row['change']), ('a', '新タイトル', 100))
 
     def test_old_database_is_rejected_without_migrating_or_deleting_records(self):
@@ -273,44 +273,44 @@ class SQLiteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, patch('viewer.client_from_config') as factory:
             root = Path(td)
             factory.return_value.collect.return_value = collection([])
-            viewer.run(root, datetime.fromisoformat('2026-11-04T21:00:00+09:00'), publish_result=False)
+            viewer.run(root, datetime.fromisoformat('2026-11-11T21:00:00+09:00'), publish_result=False)
             with viewer.Store(root) as store:
                 snapshot = store.history()[0]
                 self.assertEqual(snapshot['stream_count'], 0)
                 self.assertEqual(snapshot['games'], [])
             self.assertIn('取得配信数：0', (root / 'output/index.html').read_text())
-            self.assertEqual(json.loads((root / 'data/2026-11-04/21.json').read_text())['stream_count'], 0)
+            self.assertEqual(json.loads((root / 'data/2026-11-11/21.json').read_text())['stream_count'], 0)
 
     def test_duplicate_slot_is_rejected_without_overwriting(self):
         with tempfile.TemporaryDirectory() as td, viewer.Store(Path(td)) as store:
-            s = sample('2026-11-04', 21, game('a', 30))
+            s = sample('2026-11-11', 21, game('a', 30))
             store.save(s)
             with self.assertRaises(viewer.ViewerError):
-                store.save(sample('2026-11-04', 21, game('a', 999)))
+                store.save(sample('2026-11-11', 21, game('a', 999)))
             self.assertEqual(store.history(), [s])
 
     def test_game_uniqueness_failure_rolls_back_entire_run(self):
         with tempfile.TemporaryDirectory() as td, viewer.Store(Path(td)) as store:
             with self.assertRaises(viewer.ViewerError):
-                store.save(sample('2026-11-04', 21, game('a', 20), game('a', 30)))
+                store.save(sample('2026-11-11', 21, game('a', 20), game('a', 30)))
             self.assertEqual(store.history(), [])
-            store.save(sample('2026-11-04', 21, game('a', 40)))
+            store.save(sample('2026-11-11', 21, game('a', 40)))
             self.assertEqual(len(store.history()), 1)
 
     def test_invalid_counts_and_timestamps_are_not_saved(self):
         with tempfile.TemporaryDirectory() as td, viewer.Store(Path(td)) as store:
             for count in [-1, 1.5, True, '10']:
                 with self.subTest(count=count), self.assertRaises(viewer.ViewerError):
-                    store.save(sample('2026-11-04', 21, game('a', count)))
-            s = sample('2026-11-04', 21, game('a', 1))
-            for stamp in ['2026-11-04T21:00:00', '2026-11-04T21:30:00+09:00']:
+                    store.save(sample('2026-11-11', 21, game('a', count)))
+            s = sample('2026-11-11', 21, game('a', 1))
+            for stamp in ['2026-11-11T21:00:00', '2026-11-11T21:30:00+09:00']:
                 with self.subTest(stamp=stamp), self.assertRaises(viewer.ViewerError):
                     store.save(dict(s, scheduled_at=stamp))
             self.assertEqual(store.history(), [])
 
     def test_database_enforces_foreign_keys_and_nonnegative_integer_counts(self):
         with tempfile.TemporaryDirectory() as td, viewer.Store(Path(td)) as store:
-            store.save(sample('2026-11-04', 21, game('a', 30)))
+            store.save(sample('2026-11-11', 21, game('a', 30)))
             with closing(sqlite3.connect(Path(td) / '.local/viewers.sqlite3')) as db:
                 db.execute('PRAGMA foreign_keys = ON')
                 with self.assertRaises(sqlite3.IntegrityError):
@@ -323,9 +323,9 @@ class SQLiteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, patch('viewer.client_from_config') as factory:
             root = Path(td)
             factory.return_value.collect.return_value = collection([game('a', 20)])
-            stamp = datetime.fromisoformat('2026-11-04T21:00:00+09:00')
+            stamp = datetime.fromisoformat('2026-11-11T21:00:00+09:00')
             viewer.run(root, stamp, publish_result=False)
-            path = root / 'data/2026-11-04/21.json'
+            path = root / 'data/2026-11-11/21.json'
             original = json.loads(path.read_text())
             path.write_text('corrupted export')
             viewer.run(root, stamp, publish_result=False)
@@ -338,39 +338,39 @@ class SQLiteTests(unittest.TestCase):
             factory.return_value.collect.return_value = collection([game('a', 20)])
             with patch('viewer.atomic_write', side_effect=OSError('disk full')):
                 with self.assertRaises(OSError):
-                    viewer.run(root, datetime.fromisoformat('2026-11-04T21:00:00+09:00'), publish_result=False)
+                    viewer.run(root, datetime.fromisoformat('2026-11-11T21:00:00+09:00'), publish_result=False)
             with viewer.Store(root) as store:
                 self.assertEqual(len(store.history()), 1)
-            viewer.run(root, datetime.fromisoformat('2026-11-04T22:00:00+09:00'), publish_result=False)
-            self.assertTrue((root / 'data/2026-11-04/21.json').is_file())
-            self.assertTrue((root / 'output/2026-11-04/21.html').is_file())
-            self.assertTrue((root / 'data/2026-11-04/22.json').is_file())
+            viewer.run(root, datetime.fromisoformat('2026-11-11T22:00:00+09:00'), publish_result=False)
+            self.assertTrue((root / 'data/2026-11-11/21.json').is_file())
+            self.assertTrue((root / 'output/2026-11-11/21.html').is_file())
+            self.assertTrue((root / 'data/2026-11-11/22.json').is_file())
 
     def test_restore_is_explicit_and_rebuilds_comparable_history(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            for day, count in [('2026-11-03', 100), ('2026-11-04', 200)]:
+            for day, count in [('2026-11-10', 100), ('2026-11-11', 200)]:
                 path = root / 'data' / day / '21.json'
                 path.parent.mkdir(parents=True)
                 path.write_text(json.dumps(sample(day, 21, game('a', count))))
             with patch('viewer.client_from_config') as factory:
                 with self.assertRaises(viewer.ViewerError):
-                    viewer.run(root, datetime.fromisoformat('2026-11-04T22:00:00+09:00'), publish_result=False)
+                    viewer.run(root, datetime.fromisoformat('2026-11-11T22:00:00+09:00'), publish_result=False)
                 factory.assert_not_called()
             viewer.restore(root)
             with viewer.Store(root) as store:
-                row = viewer.compare_period(store.history(), date(2026, 11, 4), 21)[0]
+                row = viewer.compare_period(store.history(), date(2026, 11, 11), 21)[0]
                 self.assertEqual(row['change'], 100)
             with self.assertRaises(viewer.ViewerError):
                 viewer.restore(root)
 
     def test_restore_with_corrupt_export_or_duplicate_game_is_atomic(self):
-        for content in ['broken', json.dumps(sample('2026-11-04', 21, game('a', 1), game('a', 2)))]:
+        for content in ['broken', json.dumps(sample('2026-11-11', 21, game('a', 1), game('a', 2)))]:
             with self.subTest(content=content), tempfile.TemporaryDirectory() as td:
                 root = Path(td)
-                directory = root / 'data/2026-11-04'
+                directory = root / 'data/2026-11-11'
                 directory.mkdir(parents=True)
-                (directory / '20.json').write_text(json.dumps(sample('2026-11-04', 20, game('a', 10))))
+                (directory / '20.json').write_text(json.dumps(sample('2026-11-11', 20, game('a', 10))))
                 (directory / '21.json').write_text(content)
                 with self.assertRaises(viewer.ViewerError):
                     viewer.restore(root)
@@ -382,9 +382,9 @@ class SQLiteTests(unittest.TestCase):
             root = Path(td)
             with self.assertRaises(viewer.ViewerError):
                 viewer.restore(root)
-            path = root / 'data/2026-11-04/20.json'
+            path = root / 'data/2026-11-11/20.json'
             path.parent.mkdir(parents=True)
-            path.write_text(json.dumps(sample('2026-11-04', 21, game('a', 10))))
+            path.write_text(json.dumps(sample('2026-11-11', 21, game('a', 10))))
             with self.assertRaises(viewer.ViewerError):
                 viewer.restore(root)
 
@@ -412,7 +412,7 @@ class PublicationTests(unittest.TestCase):
             (root / 'data/a.json').write_text('{}')
             (root / 'output/index.html').write_text('report')
             with viewer.Store(root) as store:
-                store.save(sample('2026-11-04', 21, game('a', 10)))
+                store.save(sample('2026-11-11', 21, game('a', 10)))
             viewer.publish(root, expected_remote=str(remote))
             self.assertEqual(self.git(root, 'status', '--porcelain'), '')
             self.assertNotIn('sqlite', self.git(root, 'ls-tree', '-r', '--name-only', 'HEAD'))
@@ -440,7 +440,7 @@ class PublicationTests(unittest.TestCase):
             self.git(root, 'commit', '-m', 'initial')
             publish = viewer.publish
             with patch('viewer.publish', side_effect=lambda r: publish(r, expected_remote=str(remote))):
-                for day, multiplier in [('2026-11-03', 1), ('2026-11-04', 2)]:
+                for day, multiplier in [('2026-11-10', 1), ('2026-11-11', 2)]:
                     for hour in range(19, 24):
                         factory.return_value.collect.return_value = collection([game(str(i), (100 + i + hour) * multiplier) for i in range(100)])
                         stamp = datetime.fromisoformat(f'{day}T{hour:02d}:00:00+09:00')
@@ -449,15 +449,15 @@ class PublicationTests(unittest.TestCase):
                 history = store.history()
                 self.assertEqual(len(history), 10)
                 self.assertEqual(sum(len(s['games']) for s in history), 1000)
-                rows = viewer.compare_period(history, date(2026, 11, 4), 23)
+                rows = viewer.compare_period(history, date(2026, 11, 11), 23)
                 self.assertEqual(len(rows), 100)
                 self.assertTrue(all(r['samples'] == 5 and r['percent'] == 100 for r in rows))
             self.assertEqual(factory.return_value.collect.call_count, 10)
             self.assertEqual(len(list((root / 'data').glob('*/*.json'))), 10)
             for hour in [21, 23]:
-                report = (root / f'output/2026-11-04/{hour}.html').read_text()
+                report = (root / f'output/2026-11-11/{hour}.html').read_text()
                 self.assertIn('前日比較', report)
-                self.assertEqual(report.count('class="rise"'), (hour - 18) * 3)
+                self.assertNotIn('class="rise"', report)
             self.assertNotIn('sqlite', self.git(remote, 'ls-tree', '-r', '--name-only', 'refs/heads/main'))
             self.assertEqual(self.git(root, 'status', '--porcelain'), '')
             self.assertEqual(self.git(root, 'rev-parse', 'HEAD'), self.git(remote, 'rev-parse', 'refs/heads/main'))
