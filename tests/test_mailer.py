@@ -79,9 +79,9 @@ class MessageTests(unittest.TestCase):
             parser.feed(re.sub(r'<style[^>]*>.*?</style>', '', part.get_content(), flags=re.S))
             for tag in ['body', 'table', 'td']:
                 attributes = next(attrs for name, attrs in parser.elements if name == tag)
-                self.assertEqual(attributes.get('bgcolor'), '#10121b')
-                self.assertIn('background-color:#10121b', attributes.get('style', ''))
-                self.assertIn('color:#e9edf5', attributes.get('style', ''))
+                self.assertEqual(attributes.get('bgcolor'), viewer.BG)
+                self.assertIn(f'background-color:{viewer.BG}', attributes.get('style', ''))
+                self.assertIn(f'color:{viewer.INK}', attributes.get('style', ''))
             self.assertIn(('table', 'presentation'), [(tag, attrs.get('role')) for tag, attrs in parser.elements])
 
     def test_gmail_uses_verified_tls_and_single_recipient_envelope(self):
@@ -141,12 +141,15 @@ class MessageTests(unittest.TestCase):
             self.assertEqual(len(parser.cells), 11)  # Six comparison cells and five ranking cells.
             for attrs in parser.cells:
                 styles = dict(part.split(':', 1) for part in attrs['style'].split(';') if ':' in part)
-                if styles.get('width') == '4.5em':
-                    self.assertEqual(styles['white-space'], 'nowrap')
-                else:
+                if attrs.get('scope') == 'row':
+                    # Titles wrap anywhere so long names never widen the table.
                     self.assertEqual(styles['white-space'], 'normal')
                     self.assertEqual(styles['word-wrap'], 'break-word')
                     self.assertEqual(styles['overflow-wrap'], 'anywhere')
+                else:
+                    # Ranks and numbers stay on one line so digits are never split.
+                    self.assertEqual(styles['white-space'], 'nowrap')
+                    self.assertEqual(styles['overflow-wrap'], 'normal')
             for label in ['前回（11/10）', '今回（11/11）', '増減人数', '増減率', '比較件数／予定件数']:
                 self.assertIn(label + '：', content)
             self.assertIn('LongGameTitle' * 20 + '&lt;&amp;&gt;', content)

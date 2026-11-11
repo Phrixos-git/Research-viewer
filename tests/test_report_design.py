@@ -31,8 +31,8 @@ class ReportDesignTests(unittest.TestCase):
         for attrs,width in zip(parser.bars,(100,50,2,0)):
             self.assertEqual(attrs.get('aria-hidden'), 'true')
             self.assertIn(f'width:{width}%;', attrs['style'])
-            self.assertIn('#5b4a9e', attrs['style'])
-            self.assertIn('#90e0bc33', attrs['style'])
+            self.assertIn(viewer.BAR, attrs['style'])
+            self.assertIn(viewer.BAR_END, attrs['style'])
         self.assertIn('1,000,000', page)
         self.assertIn('Game &lt;0&gt;', page)
 

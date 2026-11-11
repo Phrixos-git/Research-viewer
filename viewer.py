@@ -277,6 +277,30 @@ def ranking_changes(snapshot, history):
     return result
 
 
+REPORT_FONT = '"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif'
+# Report palette ("Paper" light theme). Inline styles carry every color so mail clients that
+# drop <style> keep the design; change colors here only.
+COLOR_SCHEME = 'light'
+BG, INK, MUTED, FAINT = '#f6f7f9', '#1c2230', '#4f5a6e', '#646d80'
+SURFACE, RULE, RULE_STRONG, HOVER = '#ffffff', '#e3e6ec', '#cfd4dd', '#eef1f6'
+ACCENT, MINT, BAR, BAR_END = '#5b3fd0', '#16805f', '#7c6ae6', '#5fc4a066'
+UP, DOWN, NEW, PARTIAL = '#c92c48', '#1f5fc4', '#9a6a00', '#a35f00'
+# Rank badge (background, text) and row tint: gold, silver and bronze for the top three.
+BADGES = {1: ('#ffe9a8', '#5a4300'), 2: ('#e3e7ee', '#3d4658'), 3: ('#f6dcc6', '#6b3d14')}
+BADGE_DEFAULT = ('#eceef3', '#3d4658')
+ROW_TINTS = {1: '#fffaf0', 2: '#f9fafc', 3: '#fdf7f2'}
+NOWRAP = 'white-space:nowrap;word-wrap:normal;overflow-wrap:normal;'
+WRAP = 'white-space:normal;word-wrap:break-word;overflow-wrap:anywhere;'
+HEAD_CELL = (f'padding:10px 8px;line-height:1.4;vertical-align:bottom;font-size:12px;font-weight:600;'
+             f'color:{MUTED};border-bottom:1px solid {RULE_STRONG};')
+THEAD = f'<thead style="position:sticky;top:0;background-color:{SURFACE};box-shadow:0 1px 0 {RULE_STRONG};">'
+
+
+def signed_color(value):
+    """Rises use the warm rank-arrow color and falls the cool one; zero stays neutral."""
+    return f'color:{UP};' if value > 0 else f'color:{DOWN};' if value < 0 else ''
+
+
 def render_ranking(games, changes=None, averages=None):
     """Render a game viewers ranking table as an HTML string.
 
@@ -285,26 +309,17 @@ def render_ranking(games, changes=None, averages=None):
     games = games[:DISPLAY_LIMIT]
     max_viewers = max((g['viewers'] for g in games), default=0)
 
-    cell = (
-        "padding:8px 6px;line-height:1.4;white-space:normal;"
-        "word-wrap:break-word;overflow-wrap:anywhere;"
-        "border-bottom:1px solid #30354a;vertical-align:middle;"
-    )
-    change_style = cell + 'text-align:center;'
+    cell = f'padding:10px 8px;line-height:1.4;border-bottom:1px solid {RULE};vertical-align:middle;'
     viewers_style = 'display:flex;align-items:center;justify-content:flex-start;gap:16px;'
-    number_style = 'flex:1;min-width:0;text-align:right;'
+    number_style = 'flex:1;min-width:0;text-align:right;white-space:nowrap;'
     track_style = 'display:inline-block;width:140px;max-width:45%;flex:0 0 140px;'
-    change_header = (f'<th scope="col" style="{change_style}border-bottom:0;">前日比</th>'
-                     if changes is not None else '')
-    average_header = (f'<th scope="col" style="{cell}border-bottom:0;text-align:right;">19〜23時平均の前日増減（人）</th>'
-                      if averages is not None else '')
     rank_style = ('width:4.5em;min-width:4.5em;text-align:center;'
                   'white-space:nowrap;word-wrap:normal;overflow-wrap:normal;')
-    badge = {
-        1: "background-color:#3d476b;color:#e3e8f7;",
-        2: "background-color:#39415c;color:#dfe4f0;",
-        3: "background-color:#463f5e;color:#e6e0f2;",
-    }
+    change_style = cell + 'text-align:center;font-weight:700;' + NOWRAP
+    change_header = (f'<th scope="col" class="rank-change-head" style="{HEAD_CELL}text-align:center;{NOWRAP}">前日比</th>'
+                     if changes is not None else '')
+    average_header = (f'<th scope="col" class="average-head" style="{HEAD_CELL}text-align:right;{WRAP}">19〜23時平均の前日増減（人）</th>'
+                      if averages is not None else '')
     rows = []
     for idx, g in enumerate(games, start=1):
         v = g['viewers']
@@ -313,32 +328,40 @@ def render_ranking(games, changes=None, averages=None):
         else:
             pct = 0
         name = html.escape(g['name'])
-        badge_style = badge.get(idx, "background-color:#2b3049;color:#c7cde0;")
-        number = f"{v:,}"
-        row_color = {1: '#24243a', 2: '#222739', 3: '#29243a'}.get(idx)
+        badge_bg, badge_fg = BADGES.get(idx, BADGE_DEFAULT)
+        badge_style = f'background-color:{badge_bg};color:{badge_fg};'
+        row_color = ROW_TINTS.get(idx)
         row_style = f'background-color:{row_color};' if row_color else ''
         change_cell = ''
         if changes is not None:
             mark = changes[g['id']]
-            color = {'↑': 'color:#ff8a9a;', '↓': 'color:#80bfff;', '★': 'color:#ffd166;'}.get(mark, '')
+            color = {'↑': f'color:{UP};', '↓': f'color:{DOWN};', '★': f'color:{NEW};'}.get(mark, '')
             change_cell = f'<td class="rank-change" style="{change_style}{color}">{html.escape(mark)}</td>'
         average_cell = ''
         if averages is not None:
             average = averages.get(g['id'])
-            value = (f'{average["change"]:+,.1f}<br><small>比較 {average["samples"]}/{average["expected"]}</small>'
-                     if average is not None else '比較データなし')
-            average_cell = f'<td class="average-change" style="{cell}text-align:right;font-variant-numeric:tabular-nums;">{value}</td>'
+            if average is None:
+                value = f'<span style="color:{FAINT};font-size:13px;">比較データなし</span>'
+            else:
+                samples_color = PARTIAL if average['samples'] < average['expected'] else FAINT
+                value = (f'<span class="average-value" style="font-weight:600;{signed_color(average["change"])}">'
+                         f'{average["change"]:+,.1f}</span>'
+                         f'<span class="average-samples" style="display:inline-block;margin-left:8px;'
+                         f'font-size:12px;color:{samples_color};">比較 {average["samples"]}/{average["expected"]}</span>')
+            average_cell = (f'<td class="average-change" style="{cell}text-align:right;'
+                            f'font-variant-numeric:tabular-nums;{NOWRAP}">{value}</td>')
         rows.append(
             f'<tr style="{row_style}">'
-            f'<td style="{cell}{rank_style}font-variant-numeric:tabular-nums;">'
-            f'<span class="rank-badge rank-{idx}" style="display:inline-block;white-space:nowrap;padding:2px 10px;border-radius:999px;font-weight:600;{badge_style}">{idx}</span>'
+            f'<td class="rank" style="{cell}{rank_style}font-variant-numeric:tabular-nums;">'
+            f'<span class="rank-badge rank-{idx}" style="display:inline-block;white-space:nowrap;min-width:1.6em;'
+            f'padding:2px 8px;border-radius:999px;font-size:13px;font-weight:700;{badge_style}">{idx}</span>'
             "</td>"
-            f'<th scope="row" style="{cell}min-width:0;text-align:left;">{name}</th>'
-            f'<td style="{cell}text-align:right;font-variant-numeric:tabular-nums;">'
+            f'<th scope="row" style="{cell}min-width:0;text-align:left;font-weight:600;{WRAP}">{name}</th>'
+            f'<td style="{cell}text-align:right;font-variant-numeric:tabular-nums;{NOWRAP}">'
             f'<div class="viewers" style="{viewers_style}">'
-            f'<span class="viewer-number" style="{number_style}">{number}</span>'
+            f'<span class="viewer-number" style="{number_style}">{v:,}</span>'
             f'<span class="bar-track" aria-hidden="true" style="{track_style}height:8px;">'
-            f'<span class="viewer-bar" aria-hidden="true" style="display:block;height:100%;width:{pct}%;background-color:#5b4a9e;background-image:linear-gradient(to right,#5b4a9e,#90e0bc33);border-radius:4px;"></span>'
+            f'<span class="viewer-bar" aria-hidden="true" style="display:block;height:100%;width:{pct}%;background-color:{BAR};background-image:linear-gradient(to right,{BAR},{BAR_END});border-radius:4px;"></span>'
             "</span>"
             "</div>"
             "</td>"
@@ -346,11 +369,11 @@ def render_ranking(games, changes=None, averages=None):
             "</tr>"
         )
     return (
-        '<table class="report-table ranking" style="max-width:100%;table-layout:auto;border-collapse:collapse;">'
-        '<thead style="position:sticky;top:0;background-color:#202337;box-shadow:0 1px 0 #46415e;"><tr>'
-        f'<th scope="col" style="{cell}border-bottom:0;{rank_style}">順位</th>'
-        f'<th scope="col" style="{cell}border-bottom:0;text-align:left;">ゲームタイトル</th>'
-        f'<th scope="col" style="{cell}border-bottom:0;text-align:right;">'
+        '<table class="report-table ranking" style="width:100%;max-width:100%;table-layout:auto;border-collapse:collapse;">'
+        f'{THEAD}<tr>'
+        f'<th scope="col" class="rank" style="{HEAD_CELL}{rank_style}">順位</th>'
+        f'<th scope="col" style="{HEAD_CELL}text-align:left;{NOWRAP}">ゲームタイトル</th>'
+        f'<th scope="col" style="{HEAD_CELL}text-align:right;{NOWRAP}">'
         f'<div class="viewers-heading" style="{viewers_style}">'
         f'<span class="viewer-heading-text" style="{number_style}">同時視聴者数（人）</span>'
         f'<span class="viewer-heading-spacer" aria-hidden="true" style="{track_style}"></span></div></th>'
@@ -366,37 +389,41 @@ def render_html(snapshot, history):
     rows, label = report_rows(snapshot, history)
     slot = scheduled_time(snapshot)
     scope = collection_scope(snapshot)
-    test_note = ('<p class="note" style="color:#ffce80;">テストデータ（全言語配信）。正式取得は2026年11月8日から開始します。</p>'
+    games = snapshot['games']
+    test_note = (f'<p class="note" style="margin:16px 0 0;padding:10px 14px;border:1px solid {PARTIAL}55;border-radius:10px;'
+                 f'color:{PARTIAL};font-size:14px;">テストデータ（全言語配信）。正式取得は2026年11月8日から開始します。</p>'
                  if slot.date() < PRODUCTION_START else '')
     def number(value):
         return f'{value:,.1f}'.removesuffix('.0')
     def percent(row):
         return f"{row['percent']:+.1f}%" if row['percent'] is not None else '算出不可（比較元0）'
-    def table(headings, widths, records, row_header, kind):
-        cell_style = ('padding:8px 6px;line-height:1.4;text-align:right;vertical-align:top;border-bottom:1px solid #30354a;'
-                      'font-variant-numeric:tabular-nums;'
-                      'white-space:normal;word-wrap:break-word;overflow-wrap:anywhere;')
-        header = ''.join(f'<th scope="col" width="{width}%" style="{cell_style}border-bottom:0;width:{width}%;'
-                         f'{"text-align:left;" if i == row_header else ""}">{esc(label)}</th>'
-                         for i, (label, width) in enumerate(zip(headings, widths)))
+    def section_heading(text):
+        title, _, detail = text.partition('：')
+        sub = f'<p class="section-sub" style="margin:0 0 6px;color:{MUTED};font-size:14px;">{esc(detail)}</p>' if detail else ''
+        return f'<h2>{esc(title)}</h2>{sub}'
+    def comparison_table(headings, widths, records):
+        cell = f'padding:10px 8px;line-height:1.4;text-align:right;vertical-align:top;border-bottom:1px solid {RULE};font-variant-numeric:tabular-nums;'
+        header = ''.join(f'<th scope="col" width="{width}%" style="{HEAD_CELL}width:{width}%;'
+                         f'{"text-align:left;" if i == 0 else "text-align:right;"}{WRAP}">{esc(heading)}</th>'
+                         for i, (heading, width) in enumerate(zip(headings, widths)))
         body = []
-        for record in records:
+        for values, accents in records:
             cells = []
-            for i, (label, value) in enumerate(zip(headings, record)):
-                tag = 'th' if i == row_header else 'td'
-                scope = ' scope="row"' if i == row_header else ''
-                style = cell_style + ('text-align:left;' if i == row_header else '')
-                mobile_label = (f'<span class="mobile-label" style="display:none;">{esc(label)}：</span>'
-                                if kind == 'comparison' and i != row_header else '')
-                cells.append(f'<{tag}{scope} style="{style}">{mobile_label}{esc(str(value))}</{tag}>')
+            for i, (heading, value, accent) in enumerate(zip(headings, values, accents)):
+                if i == 0:
+                    cells.append(f'<th scope="row" style="{cell}text-align:left;font-weight:600;{WRAP}">{esc(str(value))}</th>')
+                else:
+                    mobile_label = f'<span class="mobile-label" style="display:none;">{esc(heading)}：</span>'
+                    cells.append(f'<td style="{cell}{NOWRAP}{accent}">{mobile_label}{esc(str(value))}</td>')
             body.append('<tr>' + ''.join(cells) + '</tr>')
-        return (f'<table class="report-table {kind}" width="100%" style="width:100%;table-layout:fixed;border-collapse:collapse;">'
-                f'<thead style="position:sticky;top:0;background-color:#202337;box-shadow:0 1px 0 #46415e;"><tr>{header}</tr></thead><tbody>{"".join(body)}</tbody></table>')
+        return (f'<table class="report-table comparison" width="100%" style="width:100%;table-layout:fixed;border-collapse:collapse;">'
+                f'{THEAD}<tr>{header}</tr></thead><tbody>{"".join(body)}</tbody></table>')
     def render_cards(selected, category):
         card_class = 'rise' if category == 'normal' else 'single-rise rise'
-        return ''.join(f'<article class="{card_class}" style="background-color:#202337;border:1px solid #46415e;border-radius:14px;padding:20px;">'
+        return ''.join(f'<article class="{card_class}" style="background-color:{SURFACE};border:1px solid {RULE_STRONG};border-radius:14px;padding:18px 20px;">'
                        f'<h3>{esc(r["name"])}</h3><strong>+{number(r["change"])} 人</strong>'
-                       f'<p>{percent(r)}</p><small>{esc(rise_detail(r))}</small></article>' for r in selected)
+                       f'<p>{percent(r)}</p>'
+                       f'<small style="color:{MUTED};">{esc(rise_detail(r))}</small></article>' for r in selected)
     sections = []
     groups = rising_groups(snapshot, history) if slot.hour not in (21, 23) else []
     for group_label, group_rows in groups:
@@ -404,22 +431,29 @@ def render_html(snapshot, history):
         single = rising_titles(group_rows, 'single')
         normal_cards = render_cards(normal, 'normal')
         if not normal_cards:
-            normal_cards = '<p>該当タイトルなし</p>' if group_rows else '<p>比較データなし</p>'
+            normal_cards = (f'<p style="color:{MUTED};">該当タイトルなし</p>' if group_rows
+                            else f'<p style="color:{MUTED};">比較データなし</p>')
         single_section = ('<h4>単一配信者による急増</h4><div class="cards">'
                           + render_cards(single, 'single') + '</div>') if single else ''
         unknown_count = sum(r['category'] == 'unavailable' for r in group_rows)
-        unknown_note = (f'<p class="note" style="color:#b5bfd2;">判定不可：{unknown_count}タイトル（配信者別内訳が未取得、または除外後の増加率が算出不可）</p>'
+        unknown_note = (f'<p class="note" style="color:{MUTED};font-size:13px;">判定不可：{unknown_count}タイトル（配信者別内訳が未取得、または除外後の増加率が算出不可）</p>'
                         if unknown_count else '')
         sections.append(f'<section><h3>{esc(group_label)}</h3><h4>通常の急上昇3選</h4>'
                         f'<div class="cards">{normal_cards}</div>{single_section}{unknown_note}</section>')
     cards = ''.join(sections)
     averages = {r['id']: r for r in rows} if slot.hour == 23 else None
-    ranking = render_ranking(snapshot['games'], ranking_changes(snapshot, history), averages)
-    ranking_note = ('<p class="note" style="color:#b5bfd2;font-size:13px;">前日23時からの順位変動：- 同順位／↑ 上昇／↓ 下降／★ 新規（前日の記録がない場合も含む）</p>'
-                    if slot.hour == 23 else '')
+    ranking = render_ranking(games, ranking_changes(snapshot, history), averages)
+    note_style = f'margin:4px 0;color:{MUTED};font-size:13px;'
+    ranking_note = ''
     if slot.hour == 23:
-        ranking_note += ('<p class="note" style="color:#b5bfd2;font-size:13px;">平均の前日増減は両日に記録がある同じ時刻だけで計算。'
-                         '比較件数/予定5件を併記し、5件未満は部分集計です。取得範囲外・欠測は0で補完しません。</p>')
+        ranking_note = (f'<p class="note legend" style="{note_style}">前日23時からの順位変動：'
+                        f'<span style="color:{UP};font-weight:700;">↑</span> 上昇　'
+                        f'<span style="color:{DOWN};font-weight:700;">↓</span> 下降　'
+                        f'<span style="font-weight:700;">-</span> 同順位　'
+                        f'<span style="color:{NEW};font-weight:700;">★</span> 新規（前日の記録がない場合も含む）</p>'
+                        f'<p class="note" style="{note_style}">平均の前日増減は両日に記録がある同じ時刻だけで計算。'
+                        f'比較件数/予定5件を併記し、5件未満（<span style="color:{PARTIAL};">琥珀色</span>）は部分集計です。'
+                        '取得範囲外・欠測は0で補完しません。</p>')
     comparison_rows = rows
     empty_comparison = '比較データなし'
     if slot.hour == 23:
@@ -428,62 +462,92 @@ def render_html(snapshot, history):
         label += '（増加率順 Top10）'
         empty_comparison = '増加率を算出できる比較データなし'
     previous_slot = slot - (timedelta(days=1) if slot.hour in (21, 23) else timedelta(hours=1))
-    comparison = table(['ゲーム', f'前回（{previous_slot.month}/{previous_slot.day}）',
-                        f'今回（{slot.month}/{slot.day}）', '増減人数', '増減率', '比較件数／予定件数'],
-                       [30, 14, 14, 14, 14, 14],
-                       [(r['name'], number(r['before']), number(r['after']), f'{r["change"]:+,.1f}',
-                         percent(r), f'{r["samples"]}/{r["expected"]}') for r in comparison_rows], 0, 'comparison') if comparison_rows else f'<p>{empty_comparison}</p>'
+    comparison = comparison_table(
+        ['ゲーム', f'前回（{previous_slot.month}/{previous_slot.day}）', f'今回（{slot.month}/{slot.day}）',
+         '増減人数', '増減率', '比較件数／予定件数'],
+        [31, 13, 13, 14, 13, 16],
+        [((r['name'], number(r['before']), number(r['after']), f'{r["change"]:+,.1f}', percent(r),
+           f'{r["samples"]}/{r["expected"]}'),
+          ('', f'color:{MUTED};', '', signed_color(r['change']),
+           f'font-weight:700;{signed_color(r["change"])}',
+           f'color:{PARTIAL if r["samples"] < r["expected"] else FAINT};'))
+         for r in comparison_rows]) if comparison_rows else f'<p style="color:{MUTED};">{empty_comparison}</p>'
     awaiting_comparison = slot.hour in (21, 23) and not rows
-    comparison_note = ('<p class="note" style="color:#b5bfd2;margin:12px 0;">前日比較データは蓄積中です</p>'
+    comparison_note = (f'<p class="note" style="margin:20px 0 0;padding:12px 16px;background-color:{SURFACE};'
+                       f'border:1px solid {RULE_STRONG};border-radius:10px;color:{MUTED};">前日比較データは蓄積中です</p>'
                        if awaiting_comparison else '')
     rising_section = (
-        '<h2>急上昇タイトル3選</h2><p>各枠最大3タイトル · 全体・最多寄与配信者の除外後とも25％以上・増加人数順</p>'
+        '<h2>急上昇タイトル3選</h2>'
+        f'<p class="section-sub" style="margin:0 0 6px;color:{MUTED};font-size:14px;">各枠最大3タイトル · 全体・最多寄与配信者の除外後とも25％以上・増加人数順</p>'
         f'{cards}') if groups else ''
     comparison_sections = '' if awaiting_comparison else (
-        f'{rising_section}<h2>{esc(label)}</h2>'
-        '<p class="note">両方に記録がある同じ時刻だけで比較。取得範囲外・欠測は0で補完しません。件数不足の比較は部分集計です。</p>'
+        f'{rising_section}{section_heading(label)}'
+        f'<p class="note" style="{note_style}margin-bottom:12px;">両方に記録がある同じ時刻だけで比較。取得範囲外・欠測は0で補完しません。'
+        '件数不足の比較は部分集計です。</p>'
         f'{comparison}')
-    chip_style = ('display:inline-block;border:1px solid #46415e;border-radius:999px;padding:4px 12px;'
-                  'margin:0 8px 8px 0;background-color:#202337;color:#e9edf5;font-size:13px;line-height:1.4;')
-    chips = [f"表示 {min(len(snapshot['games']), DISPLAY_LIMIT):,} / 集計 {len(snapshot['games']):,} タイトル",
-             f"{snapshot['included_stream_count']:,}配信（ゲーム集計対象）",
-             f'{slot:%Y年%m月%d日 %H:%M} JST']
-    metadata = ''.join(f'<span class="meta-chip" style="{chip_style}">{esc(text)}</span>' for text in chips)
-    font_family = '"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif'
-    inline_font = esc(font_family)
+    tile_style = (f'display:inline-block;vertical-align:top;box-sizing:border-box;width:32%;min-width:180px;'
+                  f'margin:0 1% 10px 0;padding:12px 16px;background-color:{SURFACE};border:1px solid {RULE_STRONG};'
+                  f'border-radius:12px;color:{INK};line-height:1.4;')
+    def tile(caption, value, detail):
+        return (f'<div class="meta-chip" style="{tile_style}">'
+                f'<div style="font-size:12px;color:{MUTED};">{esc(caption)}</div>'
+                f'<div class="tile-value" style="margin-top:2px;font-size:20px;font-weight:700;{WRAP}">{esc(value)}</div>'
+                f'<div style="margin-top:2px;font-size:12px;color:{FAINT};">{esc(detail)}</div></div>')
+    leader = games[0] if games else None
+    metadata = ''.join([
+        tile('1位', leader['name'] if leader else '—', f"{leader['viewers']:,} 人" if leader else 'ゲーム配信なし'),
+        tile('タイトル数', f'{len(games):,}', f'表示 {min(len(games), DISPLAY_LIMIT):,} / 集計 {len(games):,} タイトル'),
+        tile('ゲーム集計対象', f"{snapshot['included_stream_count']:,} 配信",
+             f"取得配信数：{snapshot['stream_count']:,} / 最大1,000件"),
+    ])
+    weekday = '月火水木金土日'[slot.weekday()]
+    inline_font = esc(REPORT_FONT)
     return f'''<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="{COLOR_SCHEME}"><meta name="supported-color-schemes" content="{COLOR_SCHEME}">
 <title>Twitchゲーム視聴者数 | {slot:%Y-%m-%d %H:%M}</title>
 <style>
-:root{{color-scheme:dark}}*{{box-sizing:border-box}}body{{margin:0;background:#10121b;color:#e9edf5;font:16px/1.7 {font_family}}}
-main{{max-width:1100px;margin:auto;padding:32px 20px}}h1{{font-size:clamp(1.6rem,4vw,2.7rem)}}h2{{margin-top:40px}}
-small,.note{{color:#b5bfd2}}.badge{{color:#c8b7ff;letter-spacing:.08em}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:16px}}
-article{{background:#202337;border:1px solid #46415e;border-radius:14px;padding:20px}}article h3{{margin-top:0}}strong{{font-size:1.5rem;color:#90e0bc}}
-.report-table thead{{background:#202337}}.report-table tbody tr:hover{{background:#1d2232}}footer{{margin-top:40px;color:#b5bfd2}}
+:root{{color-scheme:{COLOR_SCHEME}}}*{{box-sizing:border-box}}body{{margin:0;background:{BG};color:{INK};font:16px/1.7 {REPORT_FONT}}}
+main{{max-width:960px;margin:auto;padding:36px 24px}}
+h1{{margin:6px 0 4px;font-size:28px;line-height:1.3;letter-spacing:.01em}}
+h2{{margin:44px 0 4px;padding-top:20px;border-top:1px solid {RULE};font-size:20px;line-height:1.4}}
+h3{{font-size:16px;margin:24px 0 8px}}h4{{font-size:14px;color:{MUTED};margin:16px 0 8px}}
+small,.note{{color:{MUTED}}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px}}
+article h3{{margin-top:0;font-size:16px}}strong{{font-size:1.5rem;color:{MINT}}}
+.report-table thead{{background:{SURFACE}}}.report-table tbody tr:hover{{background:{HOVER}}}
 @media screen and (max-width:600px){{
-main{{padding:20px 12px!important}}h1{{font-size:24px}}.cards{{display:block}}.rise{{margin-bottom:12px}}
+main{{padding:24px 14px!important}}h1{{font-size:22px!important}}h2{{font-size:18px;margin-top:36px}}
+.meta-chip{{width:100%!important;margin:0 0 8px!important;padding:10px 14px!important}}.tile-value{{font-size:17px!important}}
+.cards{{display:block}}.rise{{margin-bottom:12px}}
+.ranking{{font-size:14px}}.ranking td,.ranking th{{padding:9px 5px!important}}
+.ranking .rank{{width:2.4em!important;min-width:2.4em!important}}.ranking .rank-badge{{padding:1px 5px!important;font-size:12px!important}}
+.ranking thead th{{white-space:normal!important;font-size:11px!important}}.ranking .viewer-heading-text{{white-space:normal!important}}.ranking .rank-change-head{{white-space:nowrap!important}}.ranking th[scope=row]{{font-size:14px}}.ranking .average-samples{{display:block!important;margin-left:0!important;font-size:11px!important}}
 .ranking .viewers{{flex-direction:column;align-items:stretch!important;gap:4px!important}}
 .ranking .bar-track{{order:2;width:100%!important;max-width:100%!important;height:4px!important;flex:none!important}}
 .ranking .viewer-number{{text-align:right}}
 .ranking .viewer-heading-spacer{{display:none!important}}
-.comparison,.comparison tbody,.comparison tr,.comparison th[scope=row],.comparison td{{display:block;width:100%!important;box-sizing:border-box}}
-.comparison thead{{display:none}}.comparison tr{{margin-bottom:16px;border:1px solid #30354a}}
-.comparison td{{text-align:left!important}}.comparison .mobile-label{{display:inline!important;font-weight:bold}}
+.comparison,.comparison tbody,.comparison tr,.comparison th[scope=row]{{display:block;width:100%!important;box-sizing:border-box}}
+.comparison thead{{display:none}}.comparison tr{{margin-bottom:12px;border:1px solid {RULE_STRONG};border-radius:10px;background:{SURFACE}}}
+.comparison td{{display:inline-block;width:50%!important;text-align:left!important;border-bottom:0!important;padding:4px 12px!important;font-size:14px}}
+.comparison th[scope=row]{{padding:10px 12px 4px!important}}
+.comparison .mobile-label{{display:block!important;font-size:11px;font-weight:normal;color:{FAINT}}}
 }}
-</style></head><body bgcolor="#10121b" style="margin:0;padding:0;background-color:#10121b;color:#e9edf5;font:16px/1.7 {inline_font};">
-<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#10121b" style="width:100%;table-layout:fixed;border-collapse:collapse;background-color:#10121b;color:#e9edf5;white-space:normal;">
-<tr><td bgcolor="#10121b" align="left" style="padding:0;border:0;text-align:left;background-color:#10121b;color:#e9edf5;font:16px/1.7 {inline_font};">
-<main style="max-width:1100px;box-sizing:border-box;margin:0 auto;padding:32px 20px;background-color:#10121b;color:#e9edf5;word-wrap:break-word;overflow-wrap:anywhere;">
-<p class="badge">TWITCH / GAME VIEWERS</p><h1>ゲーム別 視聴者数ランキング（上位配信から集計）</h1>
+</style></head><body bgcolor="{BG}" style="margin:0;padding:0;background-color:{BG};color:{INK};font:16px/1.7 {inline_font};">
+<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="{BG}" style="width:100%;table-layout:fixed;border-collapse:collapse;background-color:{BG};color:{INK};white-space:normal;">
+<tr><td bgcolor="{BG}" align="left" style="padding:0;border:0;text-align:left;background-color:{BG};color:{INK};font:16px/1.7 {inline_font};">
+<main style="max-width:960px;box-sizing:border-box;margin:0 auto;padding:36px 24px;background-color:{BG};color:{INK};word-wrap:break-word;overflow-wrap:anywhere;">
+<p class="badge" style="margin:0;color:{ACCENT};font-size:12px;font-weight:600;letter-spacing:.12em;">TWITCH · {esc(scope)} · GAME VIEWERS</p>
+<h1 style="margin:6px 0 4px;font-size:28px;line-height:1.3;color:{INK};">ゲーム別 視聴者数ランキング</h1>
+<p style="margin:0;color:{MUTED};font-size:15px;">{slot:%Y年%m月%d日}（{weekday}）{slot:%H:%M} JST · 上位配信から集計</p>
 {test_note}
-<div class="metadata" style="margin:16px 0 0;">{metadata}</div>
-<p class="note" style="font-size:13px;color:#b5bfd2;margin:0;">集計対象：{scope}の上位最大1,000件 · 取得配信数：{snapshot["stream_count"]:,} / 最大1,000件</p>
+<div class="metadata" style="margin:20px 0 0;">{metadata}</div>
+<p class="note" style="font-size:13px;color:{MUTED};margin:2px 0 0;">集計対象：{scope}の上位最大1,000件（IGDB ID登録済みゲームの配信）</p>
 {comparison_note}
 {comparison_sections}
-<h2>タイトルランキング（上位100件）</h2>{ranking_note}{ranking}
-<footer style="margin-top:40px;color:#b5bfd2;font-size:13px;">Twitch公式APIの取得期間中の集計値です。配信別視聴者数の合計で、ユニーク人数ではありません。<br>
+<h2>タイトルランキング（上位100件）</h2>{ranking_note}<div style="height:8px;line-height:8px;font-size:0;">&nbsp;</div>{ranking}
+<footer style="margin-top:44px;padding-top:16px;border-top:1px solid {RULE};color:{MUTED};font-size:13px;line-height:1.7;">Twitch公式APIの取得期間中の集計値です。配信別視聴者数の合計で、ユニーク人数ではありません。<br>
 {scope}の上位最大1,000配信のうちIGDB ID登録済みゲームが対象です。ゲームの全配信の合計ではありません。配信言語は所在地を表しません。ページ取得中の変動により順位・人数に誤差が生じ得ます。
-<p class="note" style="color:#b5bfd2;">収集開始：{esc(snapshot['started_at'])}<br>収集終了：{esc(snapshot['finished_at'])}</p></footer>
+<p class="note" style="margin:10px 0 0;color:{FAINT};">収集開始：{esc(snapshot['started_at'])}<br>収集終了：{esc(snapshot['finished_at'])}</p></footer>
 </main></td></tr></table></body></html>'''
 
 

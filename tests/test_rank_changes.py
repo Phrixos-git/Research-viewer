@@ -17,7 +17,7 @@ class RankChangeTests(unittest.TestCase):
         page = viewer.render_html(after, [before, after])
         cells = re.findall(r'<td class="rank-change" style="([^"]*)">(.*?)</td>', page)
         self.assertEqual([mark for _, mark in cells], ['-', '↑', '↓', '★'])
-        for (style, _), color in zip(cells, [None, '#ff8a9a', '#80bfff', '#ffd166']):
+        for (style, _), color in zip(cells, [None, viewer.UP, viewer.DOWN, viewer.NEW]):
             if color:
                 self.assertIn(f'color:{color};', style)
             else:

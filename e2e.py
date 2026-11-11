@@ -75,7 +75,7 @@ def verify_report(snapshot, history, page):
         mark = '★' if old_rank is None else '-' if old_rank == rank else '↑' if old_rank > rank else '↓'
         require(text(row[4]) == mark, '順位前日比')
     for style, mark in re.findall(r'<td class="rank-change" style="([^"]*)">(.*?)</td>', page):
-        colors = {'↑': '#ff8a9a', '↓': '#80bfff', '★': '#ffd166'}
+        colors = {'↑': viewer.UP, '↓': viewer.DOWN, '★': viewer.NEW}
         if mark in colors:
             require(f'color:{colors[mark]};' in style, '順位前日比の色')
     require('テストデータ' in page and '全言語配信' in page, 'テストデータ表示')
