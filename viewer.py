@@ -280,7 +280,8 @@ def ranking_changes(snapshot, history):
 REPORT_FONT = '"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif'
 # Report palette ("Paper" light theme). Inline styles carry every color so mail clients that
 # drop <style> keep the design; change colors here only.
-COLOR_SCHEME = 'light'
+# 'light only' tells mail apps that honor it (Apple Mail, iOS Mail) not to auto-darken the report.
+COLOR_SCHEME = 'light only'
 BG, INK, MUTED, FAINT = '#f6f7f9', '#1c2230', '#4f5a6e', '#646d80'
 SURFACE, RULE, RULE_STRONG, HOVER = '#ffffff', '#e3e6ec', '#cfd4dd', '#eef1f6'
 ACCENT, MINT, BAR, BAR_END = '#5b3fd0', '#16805f', '#7c6ae6', '#5fc4a066'
