@@ -278,18 +278,18 @@ def ranking_changes(snapshot, history):
 
 
 REPORT_FONT = '"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif'
-# Report palette ("Paper" light theme). Inline styles carry every color so mail clients that
-# drop <style> keep the design; change colors here only.
-# 'light only' tells mail apps that honor it (Apple Mail, iOS Mail) not to auto-darken the report.
-COLOR_SCHEME = 'light only'
-BG, INK, MUTED, FAINT = '#f6f7f9', '#1c2230', '#4f5a6e', '#646d80'
-SURFACE, RULE, RULE_STRONG, HOVER = '#ffffff', '#e3e6ec', '#cfd4dd', '#eef1f6'
-ACCENT, MINT, BAR, BAR_END = '#5b3fd0', '#16805f', '#7c6ae6', '#5fc4a066'
-UP, DOWN, NEW, PARTIAL = '#c92c48', '#1f5fc4', '#9a6a00', '#a35f00'
-# Rank badge (background, text) and row tint: gold, silver and bronze for the top three.
-BADGES = {1: ('#ffe9a8', '#5a4300'), 2: ('#e3e7ee', '#3d4658'), 3: ('#f6dcc6', '#6b3d14')}
-BADGE_DEFAULT = ('#eceef3', '#3d4658')
-ROW_TINTS = {1: '#fffaf0', 2: '#f9fafc', 3: '#fdf7f2'}
+# Report palette ("Deep Sea" dark teal theme). Inline styles carry every color so mail clients
+# that drop <style> keep the design; change colors here only.
+# 'dark only' tells mail apps that honor it (Apple Mail, iOS Mail) the report is already dark.
+COLOR_SCHEME = 'dark only'
+BG, INK, MUTED, FAINT = '#071a1f', '#e6f2f2', '#a9c3c6', '#7f9da1'
+SURFACE, RULE, RULE_STRONG, HOVER = '#0f2a31', '#173840', '#24505a', '#12323a'
+ACCENT, MINT, BAR, BAR_END = '#7fe0d2', '#7fe0d2', '#2a9d8f', '#a8f0e033'
+UP, DOWN, NEW, PARTIAL = '#ff9a8a', '#8ec5ff', '#ffd27a', '#ffc98a'
+# Rank badge (background, text) and row tint for the top three.
+BADGES = {1: ('#1f5e5a', '#e6fffb'), 2: ('#1a4a52', '#d9f2f2'), 3: ('#2b4f4a', '#e0f5f2')}
+BADGE_DEFAULT = ('#143840', '#bfe0e0')
+ROW_TINTS = {1: '#0d3035', 2: '#0c2a30', 3: '#0f2d31'}
 NOWRAP = 'white-space:nowrap;word-wrap:normal;overflow-wrap:normal;'
 WRAP = 'white-space:normal;word-wrap:break-word;overflow-wrap:anywhere;'
 HEAD_CELL = (f'padding:10px 8px;line-height:1.4;vertical-align:bottom;font-size:12px;font-weight:600;'
