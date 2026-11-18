@@ -278,18 +278,18 @@ def ranking_changes(snapshot, history):
 
 
 REPORT_FONT = '"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif'
-# Report palette ("Deep Sea" dark teal theme). Inline styles carry every color so mail clients
+# Report palette ("Slate" calm gray dark theme). Inline styles carry every color so mail clients
 # that drop <style> keep the design; change colors here only.
 # 'dark only' tells mail apps that honor it (Apple Mail, iOS Mail) the report is already dark.
 COLOR_SCHEME = 'dark only'
-BG, INK, MUTED, FAINT = '#071a1f', '#e6f2f2', '#a9c3c6', '#7f9da1'
-SURFACE, RULE, RULE_STRONG, HOVER = '#0f2a31', '#173840', '#24505a', '#12323a'
-ACCENT, MINT, BAR, BAR_END = '#7fe0d2', '#7fe0d2', '#2a9d8f', '#a8f0e033'
-UP, DOWN, NEW, PARTIAL = '#ff9a8a', '#8ec5ff', '#ffd27a', '#ffc98a'
+BG, INK, MUTED, FAINT = '#16181d', '#ececec', '#b4b8c0', '#8c919b'
+SURFACE, RULE, RULE_STRONG, HOVER = '#20232a', '#2a2e36', '#3d424c', '#1c1f25'
+ACCENT, MINT, BAR, BAR_END = '#9ecbff', '#9ecbff', '#5d8fd6', '#9ecbff33'
+UP, DOWN, NEW, PARTIAL = '#ff8a8a', '#7fb6ff', '#ffd166', '#f0c674'
 # Rank badge (background, text) and row tint for the top three.
-BADGES = {1: ('#1f5e5a', '#e6fffb'), 2: ('#1a4a52', '#d9f2f2'), 3: ('#2b4f4a', '#e0f5f2')}
-BADGE_DEFAULT = ('#143840', '#bfe0e0')
-ROW_TINTS = {1: '#0d3035', 2: '#0c2a30', 3: '#0f2d31'}
+BADGES = {1: ('#3a4a63', '#e8eefa'), 2: ('#343b47', '#e0e4ea'), 3: ('#3d3a47', '#e6e2ee')}
+BADGE_DEFAULT = ('#2a2e36', '#cdd1d8')
+ROW_TINTS = {1: '#1f2530', 2: '#1d2129', 3: '#201f28'}
 NOWRAP = 'white-space:nowrap;word-wrap:normal;overflow-wrap:normal;'
 WRAP = 'white-space:normal;word-wrap:break-word;overflow-wrap:anywhere;'
 HEAD_CELL = (f'padding:10px 8px;line-height:1.4;vertical-align:bottom;font-size:12px;font-weight:600;'
